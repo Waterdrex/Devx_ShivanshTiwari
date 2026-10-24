@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+dist/
+.vite/
+
+# Python & Environment
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Archives & Temp files
+*.zip
+*.tar.gz
+*.log
+.DS_Store
+Thumbs.db
+
+# Database backups & local dev state
+*.db.bak
