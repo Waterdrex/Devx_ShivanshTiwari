@@ -13,6 +13,7 @@ import { EventDetailModal } from './components/EventDetailModal';
 import { AuthModal } from './components/AuthModal';
 import { RegistrationModal } from './components/RegistrationModal';
 import { ReportModal } from './components/ReportModal';
+import { ProfileModal } from './components/ProfileModal';
 import { 
   fetchEvents, 
   fetchPlannerSchedule, 
@@ -40,7 +41,7 @@ const DEFAULT_DEMO_USER: UserProfile = {
   github: 'github.com/aaravsharma',
   email: 'aarav.sharma@demo.eventsphere.io',
   hackathons_won: 4,
-  is_admin: 1,
+  is_admin: 0,
 };
 
 export function App() {
@@ -63,7 +64,9 @@ export function App() {
   // Filters state
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [cityFilter, setCityFilter] = useState('Bengaluru');
   const [localityFilter, setLocalityFilter] = useState('all');
+  const [radiusFilter, setRadiusFilter] = useState('all');
   const [formatFilter, setFormatFilter] = useState('all');
   const [priceFilter, setPriceFilter] = useState('all');
   const [sortBy, setSortBy] = useState('relevance');
@@ -73,6 +76,7 @@ export function App() {
   const [detailModalEvent, setDetailModalEvent] = useState<EventItem | null>(null);
   const [registrationEvent, setRegistrationEvent] = useState<EventItem | null>(null);
   const [reportEventItem, setReportEventItem] = useState<EventItem | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'info' } | null>(null);
@@ -128,13 +132,16 @@ export function App() {
   const loadEvents = async () => {
     setLoadingEvents(true);
     try {
+      const rad = radiusFilter !== 'all' ? parseFloat(radiusFilter) : undefined;
       const data = await fetchEvents({
         search: searchQuery,
         category: selectedCategory,
-        locality: localityFilter,
+        city: cityFilter !== 'all' ? cityFilter : undefined,
+        locality: localityFilter !== 'all' ? localityFilter : undefined,
         format: formatFilter,
         price_type: priceFilter,
         sort_by: sortBy,
+        radius_km: rad,
         user_id: currentUser?.id || undefined,
       });
       setEvents(data.events);
@@ -172,11 +179,34 @@ export function App() {
 
   useEffect(() => {
     loadEvents();
-  }, [searchQuery, selectedCategory, localityFilter, formatFilter, priceFilter, sortBy, currentUser]);
+  }, [searchQuery, selectedCategory, cityFilter, localityFilter, radiusFilter, formatFilter, priceFilter, sortBy, currentUser]);
 
   useEffect(() => {
     loadPlanner();
   }, [currentUser]);
+
+  // Bounding box map search
+  const handleSearchThisArea = async (bounds: { min_lat: number; max_lat: number; min_lng: number; max_lng: number }) => {
+    setLoadingEvents(true);
+    try {
+      const data = await fetchEvents({
+        search: searchQuery,
+        category: selectedCategory,
+        city: cityFilter !== 'all' ? cityFilter : undefined,
+        format: formatFilter,
+        price_type: priceFilter,
+        sort_by: sortBy,
+        bounds,
+        user_id: currentUser?.id || undefined,
+      });
+      setEvents(data.events);
+      showToast(`Found ${data.events.length} events in this visible area`, 'info');
+    } catch (err) {
+      console.error('Failed to search area', err);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
 
   // Handlers
   const handleToggleBookmark = async (ev: EventItem) => {
@@ -362,10 +392,11 @@ export function App() {
         onToggleDemoMode={handleToggleDemoMode}
         onOpenAuth={() => setAuthModalOpen(true)}
         onLogout={handleLogout}
+        onOpenProfile={() => setProfileModalOpen(true)}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
+      <main className={`flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 ${activeTab === 'discover' ? 'max-w-[1720px]' : 'max-w-7xl'}`}>
         {activeTab === 'discover' && (
           <DiscoverPage
             events={events}
@@ -374,14 +405,18 @@ export function App() {
             setSearchQuery={setSearchQuery}
             selectedCategory={selectedCategory}
             setSelectedCategory={setSelectedCategory}
+            cityFilter={cityFilter}
+            setCityFilter={setCityFilter}
+            localityFilter={localityFilter}
+            setLocalityFilter={setLocalityFilter}
+            radiusFilter={radiusFilter}
+            setRadiusFilter={setRadiusFilter}
             formatFilter={formatFilter}
             setFormatFilter={setFormatFilter}
             priceFilter={priceFilter}
             setPriceFilter={setPriceFilter}
             sortBy={sortBy}
             setSortBy={setSortBy}
-            localityFilter={localityFilter}
-            setLocalityFilter={setLocalityFilter}
             onSelectEvent={(ev) => setDetailModalEvent(ev)}
             onToggleBookmark={handleToggleBookmark}
             onTogglePlanner={handleTogglePlanner}
@@ -389,6 +424,7 @@ export function App() {
             onQuickRegister={handleOpenRegistration}
             onReportEvent={(ev) => setReportEventItem(ev)}
             onNavigateTab={(tab) => setActiveTab(tab as any)}
+            onSearchThisArea={handleSearchThisArea}
           />
         )}
 
@@ -511,6 +547,18 @@ export function App() {
           setIsDemoMode(false);
           localStorage.removeItem('eventsphere_demo_mode');
           showToast(`Welcome back, ${user.name}! 🎉`, 'success');
+        }}
+      />
+
+      {/* Profile & Settings Modal */}
+      <ProfileModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        currentUser={currentUser}
+        showToast={showToast}
+        onProfileUpdated={(updated) => {
+          setCurrentUser(updated);
+          showToast('Profile & preferences saved successfully.', 'success');
         }}
       />
 

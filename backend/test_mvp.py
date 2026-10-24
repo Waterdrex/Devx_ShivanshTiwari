@@ -95,12 +95,19 @@ def test_full_flow():
     stats = main.get_organizer_stats()
     print(f"[OK] Organizer Hub Stats Working: Total events = {stats['total_events']}, Registrations = {stats['total_registrations']}, Avg Trust = {stats['average_trust_score']}")
 
-    # 7. Test Registration & Bookmark
-    from models import RegisterRequest, BookmarkToggleRequest
-    reg_res = main.register_for_event(created['event']['id'], RegisterRequest(attendee_name="Priya Tester", attendee_email="priya@test.com"))
+    # 7. Test Registration & Bookmark with authenticated session
+    from models import RegisterRequest, BookmarkToggleRequest, UserLogin
+    login_res = main.login(UserLogin(email="aarav.sharma@demo.eventsphere.io", password="password123"))
+    auth_token = f"Bearer {login_res['token']}"
+
+    reg_res = main.register_for_event(
+        created['event']['id'],
+        RegisterRequest(attendee_name="Aarav Sharma", attendee_email="aarav.sharma@demo.eventsphere.io"),
+        authorization=auth_token
+    )
     print(f"[OK] Registration Working: {reg_res['message']}")
     
-    bm_res = main.toggle_bookmark(BookmarkToggleRequest(user_id="u-1", event_id=created['event']['id']))
+    bm_res = main.toggle_bookmark(BookmarkToggleRequest(user_id="u-1", event_id=created['event']['id']), authorization=auth_token)
     print(f"[OK] Bookmarking Working: {bm_res['message']} (is_bookmarked: {bm_res['is_bookmarked']})")
 
     print("\nALL FULL-STACK MVP VERIFICATION TESTS PASSED SUCCESSFULLY!")

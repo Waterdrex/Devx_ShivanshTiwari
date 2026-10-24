@@ -4,7 +4,6 @@ import {
   CalendarDays,
   Users2,
   LayoutDashboard,
-  RotateCcw,
   Menu,
   X,
   Sparkles,
@@ -18,7 +17,10 @@ import {
   Sun,
   Moon,
   FlaskConical,
-  UserCircle2,
+  User,
+  Sliders,
+  ShieldCheck,
+  Check
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { useTheme } from '../context/ThemeContext';
@@ -34,226 +36,304 @@ interface Props {
   onToggleDemoMode?: () => void;
   onOpenAuth: () => void;
   onLogout: () => void;
+  onOpenProfile?: () => void;
+  activePassesCount?: number;
 }
 
 export const Navbar: React.FC<Props> = ({
   activeTab,
   setActiveTab,
   hasConflicts,
-  onResetDemo,
-  resetting,
   currentUser,
   isDemoMode = false,
   onToggleDemoMode,
   onOpenAuth,
   onLogout,
+  onOpenProfile,
+  activePassesCount = 0,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-  const { resolvedTheme, toggleTheme } = useTheme();
+  const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
+  const { theme, resolvedTheme, toggleTheme, setTheme } = useTheme();
 
-  const navItems = [
+  // Primary navigation tabs reflecting the 12 concepts
+  const primaryTabs = [
     { id: 'discover', label: 'Discover', icon: Compass },
     {
       id: 'radar',
-      label: 'Radar',
+      label: 'Opportunity Radar',
       icon: Radar,
       badge: 'AI',
-      badgeColor: 'bg-violet-500/10 text-violet-600 dark:text-violet-300 border-violet-400/30',
+      badgeColor: 'bg-brand/10 text-brand border-brand/20',
     },
-    {
-      id: 'planner',
-      label: 'Planner',
-      icon: CalendarDays,
-      badge: hasConflicts ? '!' : undefined,
-      badgeColor: 'bg-rose-500/10 text-rose-600 dark:text-rose-300 border-rose-400/30',
-    },
-    { id: 'teammatch', label: 'TeamMatch', icon: Users2 },
-    { id: 'demands', label: 'Wishlist', icon: Vote },
-    { id: 'passport', label: 'Passport', icon: Award },
-    { id: 'my-events', label: 'My Passes', icon: Ticket },
-    { id: 'organizer', label: 'Host & Admin', icon: LayoutDashboard },
+    { id: 'demands', label: 'Community', icon: Vote },
+    { id: 'organizer', label: 'Organizer Hub', icon: LayoutDashboard },
+    ...(currentUser ? [{
+      id: 'my-events',
+      label: 'My Passes',
+      icon: Ticket,
+      badge: activePassesCount > 0 ? String(activePassesCount) : undefined,
+      badgeColor: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+    }] : []),
+  ];
+
+  // Secondary tabs grouped cleanly
+  const secondaryTabs = [
+    { id: 'planner', label: 'Smart Planner', icon: CalendarDays, badge: hasConflicts ? '!' : undefined },
+    { id: 'teammatch', label: 'TeamMatch 2.0', icon: Users2 },
+    { id: 'passport', label: 'Growth Passport', icon: Award },
   ];
 
   const handleTabClick = (tabId: string) => {
     setActiveTab(tabId);
     setMobileMenuOpen(false);
     setUserDropdownOpen(false);
+    setMoreDropdownOpen(false);
   };
 
-  const isDemoUser = currentUser?.id === 'u-1';
+  const isSecondaryActive = secondaryTabs.some((t) => t.id === activeTab);
 
   return (
-    <nav className="sticky top-0 z-40 w-full backdrop-blur-xl bg-white/90 dark:bg-navy-950/90 border-b border-slate-200/80 dark:border-navy-800/80 transition-colors duration-200 shadow-sm">
+    <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-surface/90 border-b border-theme transition-colors duration-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-3">
 
-          {/* Logo */}
+          {/* Brand Logo */}
           <button
             onClick={() => handleTabClick('discover')}
-            className="flex items-center gap-2.5 group text-left shrink-0"
+            className="flex items-center gap-2.5 group text-left shrink-0 focus:outline-none"
+            aria-label="EventSphere Home"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 via-violet-500 to-teal-400 flex items-center justify-center shadow-md shadow-violet-500/20 group-hover:scale-105 transition-transform duration-200">
-              <Sparkles className="w-4.5 h-4.5 text-white group-hover:rotate-12 transition-transform" />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand to-teal-400 flex items-center justify-center shadow-md shadow-brand/20 group-hover:scale-105 transition-transform duration-200">
+              <Sparkles className="w-5 h-5 text-white group-hover:rotate-12 transition-transform" />
             </div>
             <div className="hidden sm:block leading-none">
-              <div className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">
-                Event<span className="text-violet-600 dark:text-violet-400">Sphere</span>
+              <div className="text-base font-extrabold tracking-tight text-main flex items-center gap-1">
+                Event<span className="text-brand">Sphere</span>
               </div>
-              <div className="text-[9px] font-bold tracking-widest text-teal-600 dark:text-teal-400 uppercase">
-                Hyperlocal Community
+              <div className="text-[9px] font-bold tracking-widest text-brand uppercase opacity-90">
+                Hyperlocal Tech
               </div>
             </div>
           </button>
 
-          {/* Desktop Nav Pills */}
-          <div className="hidden xl:flex items-center gap-0.5 bg-slate-100/80 dark:bg-navy-900/60 p-1 rounded-xl border border-slate-200 dark:border-navy-800 overflow-x-auto">
-            {navItems.map((item) => {
+          {/* Desktop Navigation Tabs */}
+          <nav className="hidden lg:flex items-center gap-1 bg-surface-secondary/70 p-1 rounded-2xl border border-theme/60 shadow-inner">
+            {primaryTabs.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
                 <button
                   key={item.id}
                   onClick={() => handleTabClick(item.id)}
-                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all duration-150 ${
+                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-150 ${
                     isActive
-                      ? 'bg-white dark:bg-violet-600 text-violet-700 dark:text-white shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-navy-800'
+                      ? 'bg-surface text-brand font-bold shadow-sm border border-theme/40'
+                      : 'text-secondary hover:text-main hover:bg-surface/50'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
                   <span>{item.label}</span>
                   {item.badge && (
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-bold ${item.badgeColor}`}>
+                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full border font-bold ${item.badgeColor || 'border-theme'}`}>
                       {item.badge}
                     </span>
                   )}
                 </button>
               );
             })}
-          </div>
 
-          {/* Right Controls */}
-          <div className="flex items-center gap-1.5 shrink-0">
+            {/* More Features Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setMoreDropdownOpen(!moreDropdownOpen)}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                  isSecondaryActive
+                    ? 'bg-surface text-brand font-bold shadow-sm border border-theme/40'
+                    : 'text-secondary hover:text-main hover:bg-surface/50'
+                }`}
+              >
+                <span>More</span>
+                <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-70" />
+              </button>
 
-            {/* Demo Mode Toggle */}
+              {moreDropdownOpen && (
+                <div
+                  className="absolute left-0 mt-2 w-48 rounded-2xl bg-surface border border-theme shadow-xl p-1.5 z-50 animate-fade-in text-xs"
+                  onClick={() => setMoreDropdownOpen(false)}
+                >
+                  {secondaryTabs.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => handleTabClick(item.id)}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors ${
+                          isActive
+                            ? 'bg-brand/10 text-brand font-bold'
+                            : 'text-secondary hover:text-main hover:bg-hover-surface'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Icon className="w-4 h-4 text-brand" />
+                          <span>{item.label}</span>
+                        </div>
+                        {item.badge && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 font-bold">
+                            {item.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </nav>
+
+          {/* Right Action Controls */}
+          <div className="flex items-center gap-2 shrink-0">
+
+            {/* Quick Demo Persona Indicator / Switcher */}
             {onToggleDemoMode && (
               <button
                 onClick={onToggleDemoMode}
                 title={isDemoMode ? 'Exit Demo Mode → Browse as Guest' : 'Enable Demo Mode (Aarav Sharma judge profile)'}
-                className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all border ${
+                className={`hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${
                   isDemoMode
-                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/50 shadow-sm shadow-amber-500/10'
-                    : 'bg-slate-100 dark:bg-navy-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-navy-700 hover:text-violet-600 dark:hover:text-violet-400 hover:border-violet-400/40'
+                    ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-400/40 shadow-sm'
+                    : 'bg-surface border-theme text-secondary hover:text-brand hover:border-brand/40'
                 }`}
               >
                 <FlaskConical className={`w-3.5 h-3.5 ${isDemoMode ? 'text-amber-500 animate-pulse' : ''}`} />
-                <span className="hidden lg:inline">{isDemoMode ? 'Demo ON' : 'Demo'}</span>
+                <span>{isDemoMode ? 'Demo Persona ON' : 'Demo Mode'}</span>
               </button>
             )}
 
-            {/* Dark / Light Toggle */}
+            {/* Theme Toggle (Sun / Moon) */}
             <button
               onClick={toggleTheme}
-              aria-label="Toggle theme"
-              title={resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-              className="p-2 rounded-xl border border-slate-200 dark:border-navy-700 bg-slate-100 dark:bg-navy-900 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95"
+              aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+              title={`Switch to ${resolvedTheme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              className="p-2 rounded-xl border border-theme bg-surface hover:bg-hover-surface text-secondary hover:text-main transition-all active:scale-95 shadow-sm"
             >
               {resolvedTheme === 'dark' ? (
                 <Sun className="w-4 h-4 text-amber-400" />
               ) : (
-                <Moon className="w-4 h-4 text-violet-500" />
+                <Moon className="w-4 h-4 text-brand" />
               )}
             </button>
 
-            {/* User Button / Sign-In */}
+            {/* User Profile Dropdown or Sign In */}
             {currentUser ? (
               <div className="relative">
                 <button
                   onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded-xl border text-xs transition-all shadow-sm ${
-                    isDemoUser && isDemoMode
-                      ? 'bg-amber-500/10 border-amber-400/40 text-amber-700 dark:text-amber-300'
-                      : 'bg-slate-100 dark:bg-navy-900 border-slate-200 dark:border-navy-700 text-slate-700 dark:text-slate-200'
-                  } hover:shadow-md`}
+                  className="flex items-center gap-2 p-1 pl-1.5 pr-2 rounded-2xl border border-theme bg-surface hover:bg-hover-surface transition-all shadow-sm"
+                  aria-expanded={userDropdownOpen}
                 >
                   <img
-                    src={currentUser.avatar_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.name) + '&background=7c3aed&color=fff&size=80'}
+                    src={currentUser.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=6546f5&color=fff&size=80`}
                     alt={currentUser.name}
-                    className="w-6 h-6 rounded-lg object-cover ring-1 ring-violet-500/40"
+                    className="w-7 h-7 rounded-xl object-cover ring-1 ring-brand/40"
                   />
-                  <div className="hidden sm:block text-left leading-tight max-w-[90px]">
-                    <div className="font-bold text-[11px] truncate">{currentUser.name.split(' ')[0]}</div>
-                    {isDemoUser && isDemoMode && (
-                      <div className="text-[8px] text-amber-600 dark:text-amber-400 font-semibold">DEMO</div>
-                    )}
+                  <div className="hidden sm:block text-left leading-tight max-w-[100px]">
+                    <div className="font-bold text-xs text-main truncate">{currentUser.name.split(' ')[0]}</div>
+                    <div className="text-[9px] text-muted truncate">{currentUser.role || 'Attendee'}</div>
                   </div>
-                  <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+                  <ChevronDown className="w-3.5 h-3.5 text-muted shrink-0 opacity-70" />
                 </button>
 
                 {userDropdownOpen && (
                   <div
-                    className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-700 shadow-2xl p-2 z-50 animate-fade-in text-xs"
+                    className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-surface border border-theme shadow-2xl p-2 z-50 animate-fade-in text-xs"
                     onClick={() => setUserDropdownOpen(false)}
                   >
-                    {/* User header */}
-                    <div className="px-3 py-2.5 border-b border-slate-100 dark:border-navy-800 mb-1">
+                    {/* Header info */}
+                    <div className="px-3 py-2.5 border-b border-theme/60 mb-1">
                       <div className="flex items-center gap-2.5">
                         <img
-                          src={currentUser.avatar_url}
+                          src={currentUser.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=6546f5&color=fff&size=80`}
                           alt={currentUser.name}
-                          className="w-9 h-9 rounded-xl object-cover ring-2 ring-violet-500/30"
+                          className="w-10 h-10 rounded-xl object-cover ring-2 ring-brand/30"
                         />
                         <div className="min-w-0">
-                          <div className="font-bold text-slate-900 dark:text-white truncate">{currentUser.name}</div>
-                          <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                            {currentUser.email || `${currentUser.id}@eventsphere.io`}
+                          <div className="font-bold text-main truncate">{currentUser.name}</div>
+                          <div className="text-[10px] text-muted truncate">
+                            {currentUser.email || `${currentUser.id}@demo.eventsphere.io`}
                           </div>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 font-semibold border border-violet-400/20">
-                              {currentUser.role}
+                          <div className="flex items-center gap-1 mt-1">
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand/10 text-brand font-semibold border border-brand/20">
+                              {currentUser.role || 'Member'}
                             </span>
-                            {isDemoUser && isDemoMode && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-400/20">
-                                DEMO
+                            {currentUser.is_admin ? (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 font-bold border border-rose-500/20">
+                                ADMIN
                               </span>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="space-y-0.5">
-                      <button onClick={() => handleTabClick('my-events')} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors">
-                        <Ticket className="w-4 h-4 text-teal-500" />
+                    <div className="space-y-0.5 py-1">
+                      <button
+                        onClick={() => handleTabClick('my-events')}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-secondary hover:text-main hover:bg-hover-surface transition-colors"
+                      >
+                        <Ticket className="w-4 h-4 text-emerald-500" />
                         <span>My Event Passes</span>
                       </button>
-                      <button onClick={() => handleTabClick('passport')} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors">
+
+                      {onOpenProfile && (
+                        <button
+                          onClick={onOpenProfile}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-secondary hover:text-main hover:bg-hover-surface transition-colors"
+                        >
+                          <Sliders className="w-4 h-4 text-brand" />
+                          <span>Profile & Preferences</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => handleTabClick('passport')}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-secondary hover:text-main hover:bg-hover-surface transition-colors"
+                      >
                         <Award className="w-4 h-4 text-amber-500" />
                         <span>Growth Passport & XP</span>
                       </button>
-                      <button onClick={() => handleTabClick('demands')} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors">
-                        <Vote className="w-4 h-4 text-violet-500" />
-                        <span>Community Wishlist</span>
-                      </button>
-                      {onToggleDemoMode && (
-                        <button
-                          onClick={onToggleDemoMode}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors"
-                        >
-                          <FlaskConical className="w-4 h-4 text-amber-500" />
-                          <span>{isDemoMode ? 'Exit Demo Mode' : 'Enable Demo Mode'}</span>
-                        </button>
-                      )}
+
+                      {/* Theme selection in menu */}
+                      <div className="px-3 py-2 flex items-center justify-between text-[11px] text-muted border-t border-theme/40 mt-1">
+                        <span>Appearance</span>
+                        <div className="flex items-center gap-1 bg-surface-secondary p-0.5 rounded-lg border border-theme/50">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setTheme('light'); }}
+                            className={`p-1 rounded-md ${theme === 'light' ? 'bg-surface text-brand shadow-xs' : 'text-muted'}`}
+                            title="Light theme"
+                          >
+                            <Sun className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setTheme('dark'); }}
+                            className={`p-1 rounded-md ${theme === 'dark' ? 'bg-surface text-brand shadow-xs' : 'text-muted'}`}
+                            title="Dark theme"
+                          >
+                            <Moon className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="mt-1 pt-1 border-t border-slate-100 dark:border-navy-800">
+                    <div className="mt-1 pt-1 border-t border-theme/60">
                       <button
                         onClick={onLogout}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors font-semibold"
                       >
                         <LogOut className="w-4 h-4" />
-                        <span className="font-semibold">Sign Out</span>
+                        <span>Sign Out</span>
                       </button>
                     </div>
                   </div>
@@ -262,28 +342,18 @@ export const Navbar: React.FC<Props> = ({
             ) : (
               <button
                 onClick={onOpenAuth}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-teal-500 text-white text-[11px] font-bold hover:brightness-110 active:scale-95 shadow-md shadow-violet-500/25 transition-all"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-bold transition-all shadow-md shadow-brand/20 active:scale-95"
               >
                 <LogIn className="w-3.5 h-3.5" />
                 <span>Sign In</span>
               </button>
             )}
 
-            {/* Reset Seeds */}
-            <button
-              onClick={onResetDemo}
-              disabled={resetting}
-              title="Reset database to fresh hackathon seed data"
-              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-navy-900 hover:bg-slate-200 dark:hover:bg-navy-800 border border-slate-200 dark:border-navy-700 text-slate-600 dark:text-slate-400 text-[11px] font-semibold transition-all disabled:opacity-40"
-            >
-              <RotateCcw className={`w-3.5 h-3.5 ${resetting ? 'animate-spin text-teal-500' : ''}`} />
-              <span>{resetting ? 'Resetting...' : 'Reset'}</span>
-            </button>
-
-            {/* Mobile Hamburger */}
+            {/* Mobile Hamburger Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-xl xl:hidden bg-slate-100 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 text-slate-600 dark:text-slate-400"
+              className="lg:hidden p-2 rounded-xl border border-theme text-secondary hover:text-main"
+              aria-label="Toggle Navigation Menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -291,81 +361,31 @@ export const Navbar: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="xl:hidden bg-white/98 dark:bg-navy-900/98 border-b border-slate-200 dark:border-navy-800 px-4 pt-3 pb-5 space-y-1 shadow-2xl animate-fade-in max-h-[80vh] overflow-y-auto">
-
-          {/* Demo mode banner at top */}
-          {onToggleDemoMode && (
-            <div className={`p-2.5 mb-2 rounded-xl border flex items-center justify-between text-xs ${
-              isDemoMode
-                ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-400/40 text-amber-700 dark:text-amber-300'
-                : 'bg-slate-50 dark:bg-navy-950 border-slate-200 dark:border-navy-800 text-slate-600 dark:text-slate-400'
-            }`}>
-              <div className="flex items-center gap-1.5 font-semibold">
-                <FlaskConical className="w-3.5 h-3.5" />
-                <span>Demo Mode {isDemoMode ? '(Aarav Sharma)' : ''}</span>
-              </div>
-              <button
-                onClick={() => { onToggleDemoMode(); setMobileMenuOpen(false); }}
-                className={`px-2.5 py-1 rounded-lg font-bold text-[10px] transition-all ${
-                  isDemoMode
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-violet-600 text-white'
-                }`}
-              >
-                {isDemoMode ? 'Exit' : 'Enable'}
-              </button>
-            </div>
-          )}
-
-          {/* User info or sign-in */}
-          {currentUser ? (
-            <div className="p-3 mb-2 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <img src={currentUser.avatar_url} alt={currentUser.name} className="w-8 h-8 rounded-lg object-cover ring-1 ring-violet-500" />
-                <div>
-                  <div className="font-bold text-slate-900 dark:text-white text-xs">{currentUser.name}</div>
-                  <div className="text-[10px] text-teal-600 dark:text-teal-400">{currentUser.locality} • {currentUser.role}</div>
-                </div>
-              </div>
-              <button
-                onClick={() => { onLogout(); setMobileMenuOpen(false); }}
-                className="text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Out</span>
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => { onOpenAuth(); setMobileMenuOpen(false); }}
-              className="w-full mb-2 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-teal-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-violet-500/25"
-            >
-              <LogIn className="w-4 h-4" />
-              <span>Sign In or Create Account</span>
-            </button>
-          )}
-
-          {navItems.map((item) => {
+        <div className="lg:hidden border-t border-theme bg-surface px-4 pt-3 pb-6 space-y-2 animate-fade-in shadow-xl">
+          <div className="text-[10px] uppercase font-bold tracking-wider text-muted px-2 pt-1">
+            Primary Navigation
+          </div>
+          {primaryTabs.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => handleTabClick(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold ${
                   isActive
-                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-800'
+                    ? 'bg-brand text-white font-bold'
+                    : 'text-secondary hover:text-main hover:bg-hover-surface'
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5">
                   <Icon className="w-4 h-4" />
                   <span>{item.label}</span>
                 </div>
                 {item.badge && (
-                  <span className={`text-[9px] px-2 py-0.5 rounded-full border ${item.badgeColor}`}>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : item.badgeColor}`}>
                     {item.badge}
                   </span>
                 )}
@@ -373,25 +393,43 @@ export const Navbar: React.FC<Props> = ({
             );
           })}
 
-          <div className="pt-2 border-t border-slate-200 dark:border-navy-800 flex items-center justify-between text-xs gap-2">
-            <button
-              onClick={toggleTheme}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-slate-600 dark:text-slate-300"
-            >
-              {resolvedTheme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-violet-500" />}
-              <span>{resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-            </button>
-            <button
-              onClick={() => { onResetDemo(); setMobileMenuOpen(false); }}
-              disabled={resetting}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-navy-800 border border-slate-200 dark:border-navy-700 text-slate-600 dark:text-slate-300 disabled:opacity-40"
-            >
-              <RotateCcw className={`w-3.5 h-3.5 ${resetting ? 'animate-spin text-teal-500' : ''}`} />
-              <span>Reset Seeds</span>
-            </button>
+          <div className="text-[10px] uppercase font-bold tracking-wider text-muted px-2 pt-2 border-t border-theme/60">
+            More Tools & Squads
           </div>
+          {secondaryTabs.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleTabClick(item.id)}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold ${
+                  isActive
+                    ? 'bg-brand/10 text-brand font-bold'
+                    : 'text-secondary hover:text-main hover:bg-hover-surface'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Icon className="w-4 h-4 text-brand" />
+                  <span>{item.label}</span>
+                </div>
+              </button>
+            );
+          })}
+
+          {onToggleDemoMode && (
+            <div className="pt-2 border-t border-theme/60">
+              <button
+                onClick={onToggleDemoMode}
+                className="w-full py-2.5 px-3 rounded-xl bg-surface-secondary border border-theme text-main text-xs font-bold flex items-center justify-center gap-2"
+              >
+                <FlaskConical className="w-4 h-4 text-amber-500" />
+                <span>{isDemoMode ? 'Turn Off Demo Persona' : 'Switch to Judge Demo Persona'}</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
-    </nav>
+    </header>
   );
 };

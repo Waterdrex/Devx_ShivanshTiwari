@@ -64,11 +64,11 @@ def compute_radar_score(
     # 4. Budget & Schedule Friction (Max 15)
     budget_ok = True
     if max_budget is not None:
-        budget_ok = event.get("price", 0.0) <= max_budget
+        budget_ok = float(event.get("price", 0.0)) <= float(max_budget)
     elif event.get("price_type") == "free":
         budget_ok = True
 
-    budget_score = 8 if budget_ok else 2
+    budget_score = 8 if budget_ok else 0
 
     # Schedule fit
     ev_date = event.get("date", "")
@@ -76,7 +76,11 @@ def compute_radar_score(
     schedule_score = 7 if schedule_free else 2
 
     total = goal_score + skill_score + interest_score + budget_score + schedule_score
-    radar_score = min(99, max(30, total))
+    radar_score = min(99, max(25, total))
+
+    if not budget_ok:
+        # Penalize overall score if exceeding explicit hard user budget
+        radar_score = min(radar_score, 60)
 
     if radar_score >= 85:
         tier = "Exceptional Match"
@@ -90,6 +94,8 @@ def compute_radar_score(
 
     # Formulate rational explanation
     reasons = []
+    if not budget_ok:
+        reasons.append(f"Exceeds your ${max_budget} budget (shown as alternative)")
     if matched_goals:
         reasons.append(f"Accelerates your goal: '{matched_goals[0]}'")
     if skill_overlap:

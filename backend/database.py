@@ -14,6 +14,34 @@ def get_connection():
 
 SEED_USERS = [
     {
+        "id": "u-admin",
+        "name": "Ecosystem Admin",
+        "role": "Platform Administrator",
+        "experience_level": "Expert",
+        "bio": "Platform moderation, community safety governance, and host verification oversight.",
+        "avatar_url": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=250&q=80",
+        "skills": ["Trust & Safety", "Event Operations", "Moderation", "Governance"],
+        "interests": ["Security", "Tech Ecosystems", "Open Source", "Hackathons"],
+        "github": "github.com/eventsphere-admin",
+        "email": "admin@demo.eventsphere.io",
+        "hackathons_won": 5,
+        "is_admin": 1
+    },
+    {
+        "id": "u-organizer",
+        "name": "Bangalore Tech Organizer",
+        "role": "Event Organizer",
+        "experience_level": "Advanced",
+        "bio": "HyperLab Global Lead and Bangalore Tech Collective organizer hosting hackathons and technical masterclasses.",
+        "avatar_url": "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=250&q=80",
+        "skills": ["Event Hosting", "FastAPI", "Python", "Community Building"],
+        "interests": ["Hackathons", "AI/ML", "Developer Ecosystems"],
+        "github": "github.com/hyperlab-host",
+        "email": "organizer@demo.eventsphere.io",
+        "hackathons_won": 3,
+        "is_admin": 0
+    },
+    {
         "id": "u-1",
         "name": "Aarav Sharma",
         "role": "Frontend Developer",
@@ -24,7 +52,8 @@ SEED_USERS = [
         "interests": ["AI/ML", "HealthTech", "FinTech", "Developer Tools"],
         "github": "github.com/aaravsharma",
         "email": "aarav.sharma@demo.eventsphere.io",
-        "hackathons_won": 2
+        "hackathons_won": 2,
+        "is_admin": 0
     },
     {
         "id": "u-2",
@@ -587,6 +616,12 @@ def init_db(force_reset: bool = False):
         skills TEXT,
         agenda TEXT,
         is_featured INTEGER DEFAULT 0,
+        organizer_id TEXT DEFAULT 'u-organizer',
+        source_url TEXT DEFAULT 'https://luma.com/event-demo',
+        submission_method TEXT DEFAULT 'manual',
+        review_status TEXT DEFAULT 'reviewed',
+        is_demo INTEGER DEFAULT 1,
+        moderation_notes TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
@@ -733,6 +768,17 @@ def init_db(force_reset: bool = False):
     )
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS audit_logs (
+        id TEXT PRIMARY KEY,
+        action TEXT NOT NULL,
+        actor_user_id TEXT NOT NULL,
+        target_id TEXT,
+        details TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
     # --- Schema Migrations for existing databases ---
     def add_col_if_missing(table: str, col_def: str):
         col_name = col_def.split()[0]
@@ -751,6 +797,13 @@ def init_db(force_reset: bool = False):
     add_col_if_missing("events", "latitude REAL DEFAULT 12.9352")
     add_col_if_missing("events", "longitude REAL DEFAULT 77.6245")
     add_col_if_missing("events", "status TEXT DEFAULT 'active'")
+    add_col_if_missing("events", "organizer_id TEXT DEFAULT 'u-organizer'")
+    add_col_if_missing("events", "source_url TEXT DEFAULT 'https://luma.com/event-demo'")
+    add_col_if_missing("events", "submission_method TEXT DEFAULT 'manual'")
+    add_col_if_missing("events", "review_status TEXT DEFAULT 'reviewed'")
+    add_col_if_missing("events", "is_demo INTEGER DEFAULT 1")
+    add_col_if_missing("events", "moderation_notes TEXT DEFAULT ''")
+    add_col_if_missing("users", "is_verified_organizer INTEGER DEFAULT 0")
 
     add_col_if_missing("registrations", "ticket_code TEXT")
     add_col_if_missing("registrations", "phone TEXT")
@@ -766,8 +819,46 @@ def init_db(force_reset: bool = False):
 
     # Update any existing users missing password_hash
     cursor.execute("UPDATE users SET password_hash = ? WHERE password_hash IS NULL OR password_hash = ''", (default_pwd_hash,))
-    cursor.execute("UPDATE users SET is_admin = 1 WHERE id = 'u-1'")
+    cursor.execute("UPDATE users SET is_admin = 1 WHERE id = 'u-admin'")
+    cursor.execute("UPDATE users SET is_admin = 0 WHERE id != 'u-admin'")
     cursor.execute("UPDATE users SET goals = '[\"Win Hackathons\", \"AI/Agents Upskilling\", \"Find Teammates\"]' WHERE id = 'u-1' AND (goals IS NULL OR goals = '')")
+
+    # Check if users already seeded
+    cursor.execute("SELECT COUNT(*) FROM users")
+    user_count = cursor.fetchone()[0]
+
+    if user_count == 0:
+        for u in SEED_USERS:
+            is_adm = u.get("is_admin", 0)
+            user_goals = json.dumps(u.get("goals", ["Win Hackathons", "Find Teammates", "Tech Networking"]))
+            cursor.execute("""
+            INSERT OR IGNORE INTO users (
+                id, name, role, experience_level, bio, avatar_url, skills, interests, github, email, hackathons_won,
+                password_hash, goals, locality, is_admin
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                u["id"], u["name"], u["role"], u["experience_level"], u["bio"],
+                u["avatar_url"], json.dumps(u["skills"]), json.dumps(u.get("interests", [])),
+                u.get("github", ""), u["email"], u.get("hackathons_won", 0),
+                default_pwd_hash, user_goals, u.get("locality", "Koramangala"), is_adm
+            ))
+    else:
+        for u in SEED_USERS:
+            cursor.execute("SELECT id FROM users WHERE id = ?", (u["id"],))
+            if not cursor.fetchone():
+                is_adm = u.get("is_admin", 0)
+                cursor.execute("""
+                INSERT OR IGNORE INTO users (
+                    id, name, role, experience_level, bio, avatar_url, skills, interests, github, email, hackathons_won,
+                    password_hash, goals, locality, is_admin
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    u["id"], u["name"], u["role"], u["experience_level"], u["bio"],
+                    u["avatar_url"], json.dumps(u["skills"]), json.dumps(u.get("interests", [])),
+                    u.get("github", ""), u["email"], u.get("hackathons_won", 0),
+                    default_pwd_hash, json.dumps(["Win Hackathons", "Find Teammates", "Tech Networking"]),
+                    u.get("locality", "Koramangala"), is_adm
+                ))
 
     # Update localities & coordinates on known seed events if missing
     EVENT_LOCALITY_MAP = {
@@ -819,21 +910,6 @@ def init_db(force_reset: bool = False):
                 ev["organizer_name"], ev["organizer_email"], ev["organizer_verified"],
                 ev["organizer_rating"], ev["total_seats"], ev["registered_seats"],
                 json.dumps(ev["skills"]), ev["agenda"], ev["is_featured"]
-            ))
-
-        for u in SEED_USERS:
-            is_adm = 1 if u["id"] == "u-1" else 0
-            user_goals = json.dumps(["Win Hackathons", "Find Teammates", "Tech Networking"])
-            cursor.execute("""
-            INSERT INTO users (
-                id, name, role, experience_level, bio, avatar_url, skills, interests, github, email, hackathons_won,
-                password_hash, goals, locality, is_admin
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                u["id"], u["name"], u["role"], u["experience_level"], u["bio"],
-                u["avatar_url"], json.dumps(u["skills"]), json.dumps(u["interests"]),
-                u["github"], u["email"], u["hackathons_won"],
-                default_pwd_hash, user_goals, "Koramangala", is_adm
             ))
 
         cursor.execute("INSERT OR IGNORE INTO planner_items (user_id, event_id) VALUES ('u-1', 'ev-1')")
@@ -899,6 +975,16 @@ def row_to_event(row: sqlite3.Row) -> Dict[str, Any]:
         d["latitude"] = 12.9352
     if "longitude" not in d or d["longitude"] is None:
         d["longitude"] = 77.6245
+    if "organizer_id" not in d or not d["organizer_id"]:
+        d["organizer_id"] = "u-organizer"
+    if "source_url" not in d or not d["source_url"]:
+        d["source_url"] = "https://luma.com/event-demo"
+    if "submission_method" not in d or not d["submission_method"]:
+        d["submission_method"] = "manual"
+    if "review_status" not in d or not d["review_status"]:
+        d["review_status"] = "reviewed"
+    if "is_demo" not in d or d["is_demo"] is None:
+        d["is_demo"] = 1
     return d
 
 def row_to_user(row: sqlite3.Row) -> Dict[str, Any]:

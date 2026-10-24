@@ -17,7 +17,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (saved === 'dark' || saved === 'light' || saved === 'system') {
       return saved;
     }
-    return 'dark'; // Default to dark navy theme
+    // Respect system preference by default if nothing saved
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'dark'; // Fallback to premium dark
   });
 
   const [resolvedTheme, setResolvedTheme] = useState<'dark' | 'light'>('dark');
@@ -39,10 +43,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (active === 'dark') {
         root.classList.add('dark');
         root.classList.remove('light');
+        root.setAttribute('data-theme', 'dark');
         root.style.colorScheme = 'dark';
       } else {
         root.classList.remove('dark');
         root.classList.add('light');
+        root.setAttribute('data-theme', 'light');
         root.style.colorScheme = 'light';
       }
     };

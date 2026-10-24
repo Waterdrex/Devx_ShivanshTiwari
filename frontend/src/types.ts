@@ -72,6 +72,32 @@ export interface EventItem {
   is_registered?: boolean;
   user_ticket_code?: string;
   has_conflict?: boolean;
+  distance_km?: number;
+  source_url?: string;
+  submission_method?: string;
+  organizer_id?: string;
+  is_demo?: boolean;
+}
+
+export interface CityInfo {
+  name: string;
+  state: string;
+  lat: number;
+  lon: number;
+  event_count: number;
+  is_default: boolean;
+}
+
+export interface CommunityGap {
+  id: string;
+  locality: string;
+  category: string;
+  unmet_demand_score: number;
+  gap_score: number;
+  status: string;
+  suggested_topic: string;
+  suggested_format: string;
+  is_demo_insight: boolean;
 }
 
 export interface UserProfile {

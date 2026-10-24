@@ -1,36 +1,102 @@
 import math
 from typing import Dict, Any, List, Optional
 
-LOCALITY_COORDINATES = {
-    "Koramangala": {"lat": 12.9352, "lng": 77.6245},
-    "Indiranagar": {"lat": 12.9784, "lng": 77.6408},
-    "HSR Layout": {"lat": 12.9121, "lng": 77.6446},
-    "Whitefield": {"lat": 12.9698, "lng": 77.7499},
-    "Electronic City": {"lat": 12.8399, "lng": 77.6770},
-    "Central Bangalore": {"lat": 12.9767, "lng": 77.5928},
-    "Jayanagar": {"lat": 12.9308, "lng": 77.5838},
-    "Bellandur": {"lat": 12.9260, "lng": 77.6762},
-    "Yelahanka": {"lat": 13.1007, "lng": 77.5963},
+# Supported multi-city clusters with active tech hubs
+SUPPORTED_CITIES = {
+    "Bengaluru": {
+        "lat": 12.9716,
+        "lng": 77.5946,
+        "localities": {
+            "Koramangala": {"lat": 12.9352, "lng": 77.6245},
+            "Indiranagar": {"lat": 12.9784, "lng": 77.6408},
+            "HSR Layout": {"lat": 12.9121, "lng": 77.6446},
+            "Whitefield": {"lat": 12.9698, "lng": 77.7499},
+            "Electronic City": {"lat": 12.8399, "lng": 77.6770},
+            "Central Bangalore": {"lat": 12.9767, "lng": 77.5928},
+            "Jayanagar": {"lat": 12.9308, "lng": 77.5838},
+            "Bellandur": {"lat": 12.9260, "lng": 77.6762},
+            "Yelahanka": {"lat": 13.1007, "lng": 77.5963},
+        }
+    },
+    "Mumbai": {
+        "lat": 19.0760,
+        "lng": 72.8777,
+        "localities": {
+            "Bandra": {"lat": 19.0596, "lng": 72.8295},
+            "Andheri": {"lat": 19.1136, "lng": 72.8697},
+            "Powai": {"lat": 19.1176, "lng": 72.9060},
+            "BKC": {"lat": 19.0657, "lng": 72.8687},
+            "Navi Mumbai": {"lat": 19.0330, "lng": 73.0297},
+            "Lower Parel": {"lat": 18.9953, "lng": 72.8306},
+        }
+    },
+    "Delhi NCR": {
+        "lat": 28.6139,
+        "lng": 77.2090,
+        "localities": {
+            "Cyber City": {"lat": 28.4950, "lng": 77.0895},
+            "Connaught Place": {"lat": 28.6315, "lng": 77.2167},
+            "Noida Sector 62": {"lat": 28.6280, "lng": 77.3649},
+            "Hauz Khas": {"lat": 28.5494, "lng": 77.2001},
+            "Okhla": {"lat": 28.5355, "lng": 77.2732},
+        }
+    },
+    "Hyderabad": {
+        "lat": 17.3850,
+        "lng": 78.4867,
+        "localities": {
+            "HITEC City": {"lat": 17.4435, "lng": 78.3772},
+            "Gachibowli": {"lat": 17.4401, "lng": 78.3489},
+            "Madhapur": {"lat": 17.4483, "lng": 78.3915},
+            "Jubilee Hills": {"lat": 17.4319, "lng": 78.4073},
+            "Kondapur": {"lat": 17.4689, "lng": 78.3578},
+        }
+    },
+    "Pune": {
+        "lat": 18.5204,
+        "lng": 73.8567,
+        "localities": {
+            "Hinjawadi": {"lat": 18.5913, "lng": 73.7389},
+            "Baner": {"lat": 18.5590, "lng": 73.7868},
+            "Viman Nagar": {"lat": 18.5679, "lng": 73.9143},
+            "Koregaon Park": {"lat": 18.5362, "lng": 73.8940},
+        }
+    }
 }
+
+LOCALITY_COORDINATES = SUPPORTED_CITIES["Bengaluru"]["localities"]
+
+def haversine_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculates great-circle distance between two GPS coordinates in kilometers."""
+    if lat1 == lat2 and lon1 == lon2:
+        return 0.0
+    R = 6371.0 # km
+    rlat1, rlon1 = math.radians(lat1), math.radians(lon1)
+    rlat2, rlon2 = math.radians(lat2), math.radians(lon2)
+    dlat = rlat2 - rlat1
+    dlon = rlon2 - rlon1
+    a = math.sin(dlat / 2)**2 + math.cos(rlat1) * math.cos(rlat2) * math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return round(R * c, 2)
 
 def estimate_distance_km(loc1: str, loc2: str) -> float:
     if loc1 == loc2:
         return 0.0
-    c1 = LOCALITY_COORDINATES.get(loc1)
-    c2 = LOCALITY_COORDINATES.get(loc2)
-    if not c1 or not c2:
-        return 10.0 # general average
+    c1 = None
+    c2 = None
+    # Search across all supported cities
+    for city_data in SUPPORTED_CITIES.values():
+        locs = city_data.get("localities", {})
+        if loc1 in locs:
+            c1 = locs[loc1]
+        if loc2 in locs:
+            c2 = locs[loc2]
 
-    # Haversine formula
-    R = 6371.0 # km
-    lat1, lon1 = math.radians(c1["lat"]), math.radians(c1["lng"])
-    lat2, lon2 = math.radians(c2["lat"]), math.radians(c2["lng"])
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = math.sin(dlat / 2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    crow_dist = R * c
-    # Bengaluru road factor (~1.35x crow flies)
+    if not c1 or not c2:
+        return 10.0 # general fallback average
+
+    crow_dist = haversine_distance_km(c1["lat"], c1["lng"], c2["lat"], c2["lng"])
+    # Urban road factor (~1.35x crow flies)
     return round(crow_dist * 1.35, 1)
 
 def estimate_travel_time_minutes(distance_km: float) -> int:

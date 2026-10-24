@@ -1,5 +1,16 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
+import re
+
+def validate_safe_url(url: Optional[str]) -> Optional[str]:
+    if not url:
+        return url
+    u = url.strip()
+    if not (u.startswith("http://") or u.startswith("https://")):
+        raise ValueError("URL must start with http:// or https://")
+    if any(blocked in u.lower() for blocked in ["javascript:", "data:", "vbscript:", "<script"]):
+        raise ValueError("Dangerous URL scheme or payload detected.")
+    return u
 
 class EventCreate(BaseModel):
     title: str = Field(..., min_length=3, max_length=150)
@@ -8,7 +19,7 @@ class EventCreate(BaseModel):
     event_type: str = Field(..., example="hackathon")
     format: str = Field(..., example="offline") # 'online' or 'offline'
     price_type: str = Field(..., example="free") # 'free' or 'paid'
-    price: float = Field(0.0, ge=0)
+    price: float = Field(0.0, ge=0.0)
     date: str = Field(..., example="2026-11-20")
     start_time: str = Field(..., example="10:00")
     end_time: str = Field(..., example="18:00")
@@ -19,12 +30,38 @@ class EventCreate(BaseModel):
     latitude: Optional[float] = 12.9352
     longitude: Optional[float] = 77.6245
     banner_url: Optional[str] = "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=800&q=80"
-    organizer_name: str = Field(..., example="Bangalore Tech Club")
-    organizer_email: str = Field(..., example="contact@techclub.org")
-    organizer_verified: int = Field(0, ge=0, le=1)
+    source_url: Optional[str] = None
+    submission_method: Optional[str] = "manual"
+    organizer_name: Optional[str] = None
+    organizer_email: Optional[str] = None
+    organizer_verified: Optional[int] = 0
     total_seats: int = Field(100, ge=1)
     skills: List[str] = []
     agenda: Optional[str] = ""
+
+    @field_validator("source_url")
+    @classmethod
+    def check_source_url(cls, v):
+        return validate_safe_url(v)
+
+    @field_validator("banner_url")
+    @classmethod
+    def check_banner_url(cls, v):
+        return validate_safe_url(v)
+
+    @field_validator("date")
+    @classmethod
+    def check_date(cls, v):
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", v.strip()):
+            raise ValueError("Event date must follow YYYY-MM-DD format.")
+        return v.strip()
+
+    @field_validator("price")
+    @classmethod
+    def check_price(cls, v):
+        if v < 0:
+            raise ValueError("Price cannot be negative.")
+        return float(v)
 
 class EventUpdate(BaseModel):
     title: Optional[str] = None
@@ -33,7 +70,7 @@ class EventUpdate(BaseModel):
     event_type: Optional[str] = None
     format: Optional[str] = None
     price_type: Optional[str] = None
-    price: Optional[float] = None
+    price: Optional[float] = Field(None, ge=0.0)
     date: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
@@ -44,9 +81,20 @@ class EventUpdate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     banner_url: Optional[str] = None
-    total_seats: Optional[int] = None
+    source_url: Optional[str] = None
+    total_seats: Optional[int] = Field(None, ge=1)
     skills: Optional[List[str]] = None
     agenda: Optional[str] = None
+
+    @field_validator("source_url")
+    @classmethod
+    def check_source_url(cls, v):
+        return validate_safe_url(v)
+
+    @field_validator("banner_url")
+    @classmethod
+    def check_banner_url(cls, v):
+        return validate_safe_url(v)
 
 # Auth models
 class UserSignup(BaseModel):

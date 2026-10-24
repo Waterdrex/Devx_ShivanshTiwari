@@ -9,41 +9,26 @@ import {
   AlertCircle,
   Map as MapIcon,
   LayoutGrid,
+  Columns,
   Radar,
   CalendarDays,
   Users2,
   Vote,
   ArrowRight,
-  Filter
+  TrendingUp,
+  ShieldCheck,
+  CheckCircle2,
+  Compass,
+  Layers,
+  Zap,
+  TrainFront,
+  ListFilter
 } from 'lucide-react';
-import { EventItem, LocalityInfo } from '../types';
+import { EventItem, LocalityInfo, CityInfo } from '../types';
 import { EventCard } from '../components/EventCard';
+import { CompactEventCard } from '../components/CompactEventCard';
 import { RealLeafletMap } from '../components/RealLeafletMap';
-import { fetchLocalities } from '../api';
-
-interface Props {
-  events: EventItem[];
-  loading: boolean;
-  searchQuery: string;
-  setSearchQuery: (q: string) => void;
-  selectedCategory: string;
-  setSelectedCategory: (cat: string) => void;
-  formatFilter: string;
-  setFormatFilter: (fmt: string) => void;
-  priceFilter: string;
-  setPriceFilter: (p: string) => void;
-  sortBy: string;
-  setSortBy: (s: string) => void;
-  localityFilter: string;
-  setLocalityFilter: (loc: string) => void;
-  onSelectEvent: (event: EventItem) => void;
-  onToggleBookmark: (event: EventItem) => void;
-  onTogglePlanner: (event: EventItem) => void;
-  onOpenTrustModal: (event: EventItem) => void;
-  onQuickRegister: (event: EventItem) => void;
-  onReportEvent?: (event: EventItem) => void;
-  onNavigateTab?: (tab: string) => void;
-}
+import { fetchLocalities, fetchCities } from '../api';
 
 const CATEGORIES = [
   { id: 'all', label: 'All Events', icon: '🌟' },
@@ -54,6 +39,35 @@ const CATEGORIES = [
   { id: 'volunteering', label: 'Volunteering', icon: '🌱' },
 ];
 
+interface Props {
+  events: EventItem[];
+  loading: boolean;
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
+  selectedCategory: string;
+  setSelectedCategory: (cat: string) => void;
+  cityFilter: string;
+  setCityFilter: (c: string) => void;
+  localityFilter: string;
+  setLocalityFilter: (loc: string) => void;
+  radiusFilter: string;
+  setRadiusFilter: (rad: string) => void;
+  formatFilter: string;
+  setFormatFilter: (fmt: string) => void;
+  priceFilter: string;
+  setPriceFilter: (p: string) => void;
+  sortBy: string;
+  setSortBy: (s: string) => void;
+  onSelectEvent: (event: EventItem) => void;
+  onToggleBookmark: (event: EventItem) => void;
+  onTogglePlanner: (event: EventItem) => void;
+  onOpenTrustModal: (event: EventItem) => void;
+  onQuickRegister: (event: EventItem) => void;
+  onReportEvent?: (event: EventItem) => void;
+  onNavigateTab?: (tab: string) => void;
+  onSearchThisArea?: (bounds: { min_lat: number; max_lat: number; min_lng: number; max_lng: number }) => void;
+}
+
 export const DiscoverPage: React.FC<Props> = ({
   events,
   loading,
@@ -61,14 +75,18 @@ export const DiscoverPage: React.FC<Props> = ({
   setSearchQuery,
   selectedCategory,
   setSelectedCategory,
+  cityFilter,
+  setCityFilter,
+  localityFilter,
+  setLocalityFilter,
+  radiusFilter,
+  setRadiusFilter,
   formatFilter,
   setFormatFilter,
   priceFilter,
   setPriceFilter,
   sortBy,
   setSortBy,
-  localityFilter,
-  setLocalityFilter,
   onSelectEvent,
   onToggleBookmark,
   onTogglePlanner,
@@ -76,295 +94,422 @@ export const DiscoverPage: React.FC<Props> = ({
   onQuickRegister,
   onReportEvent,
   onNavigateTab,
+  onSearchThisArea,
 }) => {
-  const [showFilters, setShowFilters] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
+  const [viewMode, setViewMode] = useState<'split' | 'grid' | 'map'>('split');
+  const [mobileTab, setMobileTab] = useState<'list' | 'map'>('list');
+  const [citiesList, setCitiesList] = useState<CityInfo[]>([]);
   const [localitiesList, setLocalitiesList] = useState<LocalityInfo[]>([]);
   const [highlightedMarkerId, setHighlightedMarkerId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchLocalities()
-      .then((data) => setLocalitiesList(data.localities))
-      .catch((err) => console.error('Failed to load localities', err));
+    fetchCities()
+      .then((data) => setCitiesList(data.cities))
+      .catch((err) => console.error('Failed to load cities', err));
   }, []);
 
+  useEffect(() => {
+    fetchLocalities(cityFilter !== 'all' ? cityFilter : undefined)
+      .then((data) => setLocalitiesList(data.localities))
+      .catch((err) => console.error('Failed to load localities', err));
+  }, [cityFilter]);
+
+  // Count mapped vs virtual events
+  const mappedCount = events.filter(
+    (e) => typeof e.latitude === 'number' && typeof e.longitude === 'number' && e.latitude !== 0 && e.longitude !== 0
+  ).length;
+
   return (
-    <div className="space-y-6 pb-16">
+    <div className="space-y-4 pb-12 w-full animate-fade-in">
       
-      {/* SaaS Discovery Header & Quick Actions Bar */}
-      <div className="rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-navy-800 bg-white dark:bg-navy-900 shadow-sm relative overflow-hidden transition-colors">
-        <div className="relative max-w-4xl space-y-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-navy-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-navy-700 text-xs font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>Hyperlocal Community Discovery</span>
-            </span>
+      {/* SCREEN 1: Hero Section from Image 1 */}
+      <section className="relative rounded-3xl overflow-hidden border border-theme bg-surface shadow-card transition-all">
+        {/* Subtle decorative glow in dark and light */}
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 rounded-full bg-brand/10 blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/3 -mb-20 w-80 h-80 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
 
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-navy-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-navy-700 text-xs font-semibold">
-              <span>Bengaluru Tech Corridor • 9 Active Hubs</span>
+        <div className="relative p-6 sm:p-8 lg:p-10 space-y-5">
+          {/* Top trust badge */}
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand/10 border border-brand/20 text-brand text-xs font-bold tracking-wide">
+            <Sparkles className="w-3.5 h-3.5 text-brand" />
+            <span>Smart Hyperlocal Event Intelligence</span>
+          </div>
+
+          {/* Hero Headline and Subtitle */}
+          <div className="max-w-3xl space-y-2.5">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-main leading-[1.15]">
+              Discover Tech Events with <span className="text-brand">Auditable Trust.</span>
+            </h1>
+            <p className="text-xs sm:text-sm lg:text-base text-secondary leading-relaxed max-w-2xl font-normal">
+              Explore authentic hackathons, workshops, and developer meetups near you. Every listing is scored out of 100 with transparent signals and duplicate safeguards.
+            </p>
+          </div>
+
+          {/* Location & Active Count strip */}
+          <div className="flex items-center gap-4 text-xs text-secondary">
+            <span className="flex items-center gap-1.5 font-medium">
+              <MapPin className="w-3.5 h-3.5 text-rose-500" />
+              <span>Bengaluru Tech Corridor & Remote</span>
+            </span>
+            <span>•</span>
+            <span className="flex items-center gap-1.5 font-medium">
+              <Calendar className="w-3.5 h-3.5 text-brand" />
+              <span>{events.length} Active Verified Listings</span>
             </span>
           </div>
 
-          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight">
-            Discover Verified Tech Events & Hackathons
-          </h1>
-
-          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-2xl">
-            Explore authentic hackathons, technical workshops, and developer meetups with genuine OpenStreetMap GPS pins, verified KYC trust scoring, and conflict-free schedule intelligence.
-          </p>
-
-          {/* Feature Quick Launch Bar */}
-          {onNavigateTab && (
-            <div className="pt-2 flex flex-wrap gap-2 text-xs">
-              <button
-                onClick={() => onNavigateTab('radar')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-navy-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-navy-700 hover:border-violet-500/40 font-semibold transition-all shadow-sm"
-              >
-                <Radar className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
-                <span>Opportunity Radar</span>
-              </button>
-
-              <button
-                onClick={() => onNavigateTab('planner')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-navy-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-navy-700 hover:border-teal-500/40 font-semibold transition-all shadow-sm"
-              >
-                <CalendarDays className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                <span>Smart Planner</span>
-              </button>
-
-              <button
-                onClick={() => onNavigateTab('teammatch')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-navy-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-navy-700 hover:border-amber-500/40 font-semibold transition-all shadow-sm"
-              >
-                <Users2 className="w-3.5 h-3.5 text-amber-500" />
-                <span>TeamMatch 2.0</span>
-              </button>
-
-              <button
-                onClick={() => onNavigateTab('demands')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-navy-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-navy-700 hover:border-rose-500/40 font-semibold transition-all shadow-sm"
-              >
-                <Vote className="w-3.5 h-3.5 text-rose-500" />
-                <span>Community Wishlist</span>
-              </button>
+          {/* Search Bar Input */}
+          <div className="max-w-2xl pt-1">
+            <div className="relative flex items-center bg-surface-secondary/80 rounded-2xl border border-theme focus-within:border-brand shadow-sm px-4 py-3">
+              <Search className="w-4 h-4 text-secondary shrink-0 mr-3" />
+              <input
+                type="text"
+                placeholder="Search by event title, tech stack (e.g. React, PyTorch), venue, or city..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-transparent text-main text-xs sm:text-sm placeholder:text-muted focus:outline-none"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="p-1 text-muted hover:text-main cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-          )}
-        </div>
-
-        {/* Search Bar Input & View Switcher */}
-        <div className="relative mt-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by event title, tech stack (e.g. React, PyTorch, Rust), venue, or locality..."
-              className="w-full pl-11 pr-10 py-3 rounded-2xl bg-white dark:bg-navy-950/90 border border-slate-200 dark:border-navy-700/80 text-slate-900 dark:text-white placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 shadow-sm"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
           </div>
-
-          {/* List vs Real Map View Toggle */}
-          <div className="flex items-center p-1 bg-slate-100 dark:bg-navy-950 rounded-2xl border border-slate-200 dark:border-navy-700/80 shrink-0 shadow-inner">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                viewMode === 'grid'
-                  ? 'bg-white dark:bg-gradient-to-r dark:from-violet-600 dark:to-teal-500 text-violet-700 dark:text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <LayoutGrid className="w-4 h-4" />
-              <span>List View</span>
-            </button>
-            <button
-              onClick={() => setViewMode('map')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                viewMode === 'map'
-                  ? 'bg-white dark:bg-gradient-to-r dark:from-violet-600 dark:to-teal-500 text-violet-700 dark:text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <MapIcon className="w-4 h-4" />
-              <span>Real Map View</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter & Category Controls */}
-      <div className="space-y-4">
-        {/* Category & Locality Pills */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-none">
+          {/* Quick Category Chips from Image */}
+          <div className="flex items-center gap-2.5 overflow-x-auto pb-1 scrollbar-none pt-1">
             {CATEGORIES.map((cat) => {
               const active = selectedCategory === cat.id;
               return (
                 <button
                   key={cat.id}
                   onClick={() => setSelectedCategory(cat.id)}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-150 ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-semibold whitespace-nowrap transition-all duration-150 cursor-pointer ${
                     active
-                      ? 'bg-gradient-to-r from-violet-600 to-teal-500 text-white shadow-md shadow-violet-900/20'
-                      : 'bg-white dark:bg-navy-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-navy-850 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-navy-800'
+                      ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-teal-500 text-white shadow-md shadow-brand/25 ring-2 ring-brand/30'
+                      : 'bg-surface-secondary/80 text-secondary hover:text-main hover:bg-surface border border-theme'
                   }`}
                 >
-                  <span>{cat.icon}</span>
+                  <span className="text-sm">{cat.icon}</span>
                   <span>{cat.label}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* Toggle Advanced Filters */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors ${
-              showFilters
-                ? 'bg-violet-50 dark:bg-violet-950/80 text-violet-700 dark:text-violet-300 border-violet-300 dark:border-violet-600'
-                : 'bg-white dark:bg-navy-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-navy-800 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
-            <span>Filters & Locality ({localityFilter !== 'all' ? localityFilter : 'All'})</span>
-          </button>
-        </div>
-
-        {/* Expandable Filter Drawer */}
-        {showFilters && (
-          <div className="p-4 rounded-2xl bg-white dark:bg-navy-900/90 border border-slate-200 dark:border-navy-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs animate-fade-in shadow-sm">
-            {/* Locality Filter */}
+          {/* Live Platform Stats Row */}
+          <div className="pt-3 border-t border-theme grid grid-cols-2 sm:grid-cols-4 gap-4 text-center sm:text-left">
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                Bengaluru Locality
-              </label>
-              <select
-                value={localityFilter}
-                onChange={(e) => setLocalityFilter(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500"
-              >
-                <option value="all">All Hubs (Bengaluru Wide)</option>
-                {localitiesList.map((loc) => (
-                  <option key={loc.name} value={loc.name}>
-                    {loc.name} ({loc.event_count} events)
-                  </option>
-                ))}
-              </select>
+              <div className="text-base sm:text-xl font-extrabold text-main">{events.length}+</div>
+              <div className="text-[11px] text-secondary font-medium">Curated Local Events</div>
             </div>
-
-            {/* Format Filter */}
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                Format / Mode
-              </label>
-              <div className="flex gap-2">
-                {[
-                  { id: 'all', label: 'All' },
-                  { id: 'offline', label: 'In-Person' },
-                  { id: 'online', label: 'Virtual' },
-                ].map((f) => (
-                  <button
-                    key={f.id}
-                    onClick={() => setFormatFilter(f.id)}
-                    className={`flex-1 py-1.5 px-2 rounded-lg border text-center font-semibold ${
-                      formatFilter === f.id
-                        ? 'bg-violet-600 text-white border-violet-600'
-                        : 'bg-slate-50 dark:bg-navy-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-navy-800'
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
+              <div className="text-base sm:text-xl font-extrabold text-brand">100% Verified</div>
+              <div className="text-[11px] text-secondary font-medium">7-Signal Host Trust</div>
             </div>
-
-            {/* Price Filter */}
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                Pricing
-              </label>
-              <div className="flex gap-2">
-                {[
-                  { id: 'all', label: 'All' },
-                  { id: 'free', label: 'Free' },
-                  { id: 'paid', label: 'Paid' },
-                ].map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setPriceFilter(p.id)}
-                    className={`flex-1 py-1.5 px-2 rounded-lg border text-center font-semibold ${
-                      priceFilter === p.id
-                        ? 'bg-violet-600 text-white border-violet-600'
-                        : 'bg-slate-50 dark:bg-navy-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-navy-800'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
+              <div className="text-base sm:text-xl font-extrabold text-main">{localitiesList.length || 9} Active Hubs</div>
+              <div className="text-[11px] text-secondary font-medium">Bengaluru Tech Hubs</div>
             </div>
-
-            {/* Sort Filter */}
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                Sort Listings By
-              </label>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-violet-500"
-              >
-                <option value="relevance">Relevance & Trust</option>
-                <option value="date">Date (Earliest First)</option>
-                <option value="popularity">Popularity (Most Seats Taken)</option>
-                <option value="trust">Highest Trust Score</option>
-              </select>
+              <div className="text-base sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400">Zero Conflict</div>
+              <div className="text-[11px] text-secondary font-medium">Calendar Intelligence</div>
             </div>
           </div>
-        )}
+        </div>
+      </section>
+
+      {/* TOP WORKSPACE NAVIGATION & VIEW SWITCHER STRIP */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-2xl bg-surface border border-theme shadow-sm">
+        
+        {/* Left: Corridor title & stats */}
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-brand/10 text-brand flex items-center justify-center font-bold shrink-0">
+            <Compass className="w-4 h-4" />
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-extrabold text-main">
+                {cityFilter === 'all' ? 'All Cities' : cityFilter} Tech Explorer
+              </h2>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
+                Live Leaflet GPS
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-secondary">
+              <span><strong>{events.length}</strong> events</span>
+              <span>•</span>
+              <span>📍 {mappedCount} mapped in corridors</span>
+              {localityFilter !== 'all' && (
+                <>
+                  <span>•</span>
+                  <span className="text-brand font-semibold">{localityFilter}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Quick Sort + View Mode Switcher */}
+        <div className="flex items-center gap-2 justify-between sm:justify-end">
+          
+          {/* Sort selector */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-secondary border border-theme text-xs">
+            <ListFilter className="w-3.5 h-3.5 text-muted" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="bg-transparent text-main font-semibold focus:outline-none cursor-pointer"
+            >
+              <option value="relevance">Top Relevance</option>
+              <option value="date">Upcoming Date</option>
+              <option value="trust">Highest Trust</option>
+              <option value="seats">Available Seats</option>
+              <option value="distance">Nearest Distance</option>
+            </select>
+          </div>
+
+          {/* View Modes (Split / Grid / Map) */}
+          <div className="flex items-center p-1 bg-surface-secondary rounded-xl border border-theme">
+            <button
+              onClick={() => setViewMode('split')}
+              title="Split View (Feed + Map Explorer)"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'split'
+                  ? 'bg-brand text-white shadow-sm'
+                  : 'text-secondary hover:text-main'
+              }`}
+            >
+              <Columns className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Split Explorer</span>
+            </button>
+
+            <button
+              onClick={() => setViewMode('grid')}
+              title="Grid Cards Only"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-brand text-white shadow-sm'
+                  : 'text-secondary hover:text-main'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Card Grid</span>
+            </button>
+
+            <button
+              onClick={() => setViewMode('map')}
+              title="Full Screen Map"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'map'
+                  ? 'bg-brand text-white shadow-sm'
+                  : 'text-secondary hover:text-main'
+              }`}
+            >
+              <MapIcon className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Full Map</span>
+            </button>
+          </div>
+
+        </div>
+
       </div>
 
-      {/* Main View Area: Either Real Leaflet Map or Grid View */}
-      {viewMode === 'map' ? (
-        <RealLeafletMap
-          events={events}
-          localities={localitiesList}
-          selectedLocality={localityFilter}
-          onSelectLocality={(loc) => setLocalityFilter(loc)}
-          onSelectEvent={onSelectEvent}
-          onOpenTrustModal={onOpenTrustModal}
-          highlightedEventId={highlightedMarkerId}
-        />
-      ) : (
+      {/* MOBILE SEGMENTED CONTROL (List vs Map) */}
+      <div className="flex lg:hidden items-center p-1 bg-surface rounded-2xl border border-theme shadow-sm">
+        <button
+          onClick={() => setMobileTab('list')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            mobileTab === 'list'
+              ? 'bg-brand text-white shadow-sm'
+              : 'text-secondary hover:text-main'
+          }`}
+        >
+          <LayoutGrid className="w-3.5 h-3.5" />
+          <span>Event Feed ({events.length})</span>
+        </button>
+        <button
+          onClick={() => setMobileTab('map')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all ${
+            mobileTab === 'map'
+              ? 'bg-brand text-white shadow-sm'
+              : 'text-secondary hover:text-main'
+          }`}
+        >
+          <MapIcon className="w-3.5 h-3.5" />
+          <span>Interactive Map ({mappedCount})</span>
+        </button>
+      </div>
+
+      {/* VIEW MODE 1: SPLIT EXPLORER (Left Scrollable Feed + Right Large Leaflet Map) */}
+      {viewMode === 'split' && (
+        <div className="flex flex-col lg:flex-row items-stretch gap-4 w-full">
+          
+          {/* Left Event Feed Column */}
+          <div
+            className={`w-full lg:w-[390px] xl:w-[440px] shrink-0 space-y-3 ${
+              mobileTab === 'map' ? 'hidden lg:block' : 'block'
+            }`}
+          >
+            {/* Feed Sub-Header */}
+            <div className="flex items-center justify-between px-2 py-1">
+              <span className="text-xs font-bold text-main">
+                Filtered Discoveries ({events.length})
+              </span>
+              {localityFilter !== 'all' && (
+                <button
+                  onClick={() => setLocalityFilter('all')}
+                  className="text-[11px] font-semibold text-brand hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <span>Clear Hub</span>
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Scrollable Feed Cards */}
+            <div className="h-[520px] lg:h-[calc(100vh-175px)] overflow-y-auto space-y-2.5 pr-1.5 scrollbar-thin">
+              {loading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <div
+                      key={n}
+                      className="h-28 rounded-2xl bg-surface border border-theme animate-pulse p-3 space-y-2"
+                    >
+                      <div className="h-4 w-3/4 rounded bg-surface-secondary" />
+                      <div className="h-3 w-1/2 rounded bg-surface-secondary" />
+                    </div>
+                  ))}
+                </div>
+              ) : events.length === 0 ? (
+                <div className="p-8 text-center rounded-3xl bg-surface border border-theme space-y-3 shadow-card">
+                  <AlertCircle className="w-8 h-8 text-muted mx-auto" />
+                  <h3 className="text-sm font-bold text-main">No matching events in area</h3>
+                  <p className="text-xs text-secondary">
+                    Try clearing your search query or expanding your radius.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedCategory('all');
+                      setLocalityFilter('all');
+                      setRadiusFilter('all');
+                      setFormatFilter('all');
+                      setPriceFilter('all');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-bold transition-all shadow-sm cursor-pointer hover:bg-brand-hover"
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+              ) : (
+                events.map((ev) => (
+                  <CompactEventCard
+                    key={ev.id}
+                    event={ev}
+                    isSelected={highlightedMarkerId === ev.id}
+                    onSelect={(selected) => {
+                      setHighlightedMarkerId(selected.id);
+                      onSelectEvent(selected);
+                    }}
+                    onToggleBookmark={onToggleBookmark}
+                    onOpenTrustModal={onOpenTrustModal}
+                    onQuickRegister={onQuickRegister}
+                    onMouseEnter={() => setHighlightedMarkerId(ev.id)}
+                    onMouseLeave={() => setHighlightedMarkerId(null)}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Right Map Workspace Column */}
+          <div
+            className={`flex-1 min-w-0 ${
+              mobileTab === 'list' ? 'hidden lg:block' : 'block'
+            }`}
+          >
+            <RealLeafletMap
+              events={events}
+              localities={localitiesList}
+              selectedLocality={localityFilter}
+              onSelectLocality={(loc) => setLocalityFilter(loc)}
+              selectedCategory={selectedCategory}
+              onSelectCategory={(cat) => setSelectedCategory(cat)}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              radiusFilter={radiusFilter}
+              onRadiusChange={setRadiusFilter}
+              priceFilter={priceFilter}
+              onPriceChange={setPriceFilter}
+              formatFilter={formatFilter}
+              onFormatChange={setFormatFilter}
+              onSelectEvent={onSelectEvent}
+              onOpenTrustModal={onOpenTrustModal}
+              onSearchThisArea={onSearchThisArea}
+              highlightedEventId={highlightedMarkerId}
+              onHoverEvent={(id) => setHighlightedMarkerId(id)}
+              containerHeight="h-[520px] lg:h-[calc(100vh-175px)]"
+            />
+          </div>
+
+        </div>
+      )}
+
+      {/* VIEW MODE 2: FULL MAP VIEW */}
+      {viewMode === 'map' && (
+        <div className="w-full">
+          <RealLeafletMap
+            events={events}
+            localities={localitiesList}
+            selectedLocality={localityFilter}
+            onSelectLocality={(loc) => setLocalityFilter(loc)}
+            selectedCategory={selectedCategory}
+            onSelectCategory={(cat) => setSelectedCategory(cat)}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            radiusFilter={radiusFilter}
+            onRadiusChange={setRadiusFilter}
+            priceFilter={priceFilter}
+            onPriceChange={setPriceFilter}
+            formatFilter={formatFilter}
+            onFormatChange={setFormatFilter}
+            onSelectEvent={onSelectEvent}
+            onOpenTrustModal={onOpenTrustModal}
+            onSearchThisArea={onSearchThisArea}
+            highlightedEventId={highlightedMarkerId}
+            onHoverEvent={(id) => setHighlightedMarkerId(id)}
+            containerHeight="h-[650px] lg:h-[calc(100vh-160px)]"
+          />
+        </div>
+      )}
+
+      {/* VIEW MODE 3: CARD GRID VIEW */}
+      {viewMode === 'grid' && (
         <>
           {loading ? (
-            /* Skeleton Loading Grid */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[1, 2, 3, 4, 5, 6].map((n) => (
                 <div
                   key={n}
-                  className="h-80 rounded-3xl bg-slate-100 dark:bg-navy-900 border border-slate-200 dark:border-navy-800 animate-pulse p-4 space-y-4"
+                  className="h-96 rounded-3xl bg-surface border border-theme animate-pulse p-4 space-y-4 shadow-card"
                 >
-                  <div className="h-40 rounded-2xl bg-slate-200 dark:bg-navy-800" />
-                  <div className="h-4 w-3/4 rounded bg-slate-200 dark:bg-navy-800" />
-                  <div className="h-3 w-1/2 rounded bg-slate-200 dark:bg-navy-800" />
+                  <div className="h-44 rounded-2xl bg-surface-secondary" />
+                  <div className="h-4 w-3/4 rounded bg-surface-secondary" />
+                  <div className="h-3 w-1/2 rounded bg-surface-secondary" />
                 </div>
               ))}
             </div>
           ) : events.length === 0 ? (
-            <div className="p-12 text-center rounded-3xl bg-white dark:bg-navy-900/60 border border-slate-200 dark:border-navy-800 space-y-3 shadow-sm">
-              <AlertCircle className="w-10 h-10 text-slate-400 dark:text-slate-500 mx-auto" />
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">No matching events found</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-                Try adjusting your search keywords, clear locality filters, or explore all formats.
+            <div className="p-12 text-center rounded-3xl bg-surface border border-theme space-y-3 shadow-card">
+              <AlertCircle className="w-10 h-10 text-muted mx-auto" />
+              <h3 className="text-base font-bold text-main">No matching events found</h3>
+              <p className="text-xs text-secondary max-w-sm mx-auto">
+                Try adjusting your search query, clear locality filters, or explore all categories.
               </p>
               <button
                 onClick={() => {
@@ -373,8 +518,9 @@ export const DiscoverPage: React.FC<Props> = ({
                   setFormatFilter('all');
                   setPriceFilter('all');
                   setLocalityFilter('all');
+                  setRadiusFilter('all');
                 }}
-                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-navy-800 hover:bg-slate-200 dark:hover:bg-navy-700 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors"
+                className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-bold transition-all shadow-sm cursor-pointer hover:bg-brand-hover"
               >
                 Reset All Filters
               </button>
@@ -401,6 +547,7 @@ export const DiscoverPage: React.FC<Props> = ({
           )}
         </>
       )}
+
     </div>
   );
 };

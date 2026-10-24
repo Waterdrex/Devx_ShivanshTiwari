@@ -1,162 +1,173 @@
 # EventSphere 🌐⚡
 > **Hyperlocal Event Discovery & Community Engagement Platform**  
-> *Built for Hackathons — Full-Stack Production-Ready Platform*
+> *Built for VecnaVerse National Level Hackathon — Problem Statement 1*
 
-EventSphere bridges the gap between ambitious developers, designers, and local tech ecosystems. Beyond generic listing directories, EventSphere provides **Trust Intelligence** (explainable 0–100 authenticity scoring with duplicate clone detection), an **Algorithmic TeamMatch 2.0 Engine** (assembling complementary hackathon teams and managing squads), an **Opportunity Radar** (personalized goal and skill matching), **Hyperlocal Mobility Intelligence** (Bengaluru tech corridor mapping and physical travel conflict warnings), and a **Growth Passport** (tracking developer XP and verified skill badges).
+EventSphere bridges the gap between ambitious developers, designers, and local tech ecosystems. Beyond static directories, EventSphere provides **Algorithmic Trust Intelligence** (explainable 0–100 authenticity scoring with duplicate clone detection and verified host identity), **Multi-City & Hyperlocal Distance Discovery** (great-circle Haversine coordinates and travel conflict warnings), an **Opportunity Radar** (personalized goal and skill matching with budget enforcement), an **Organizer Hub with Community Gap Radar** (identifying unmet local demand), **Atomic Digital Passes** (concurrency-safe capacity reservation), an **Algorithmic TeamMatch Engine** (assembling complementary hackathon teams), and a **Growth Passport** (tracking developer XP and verified skill badges).
 
 ---
 
 ## 🌟 Tech Stack
-- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Lucide Icons
-- **Backend**: Python FastAPI, SQLite, Pydantic v2, Uvicorn, PBKDF2 Password Hashing
+- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS, Lucide Icons, Leaflet / OpenStreetMap
+- **Backend**: Python FastAPI, SQLite, Pydantic v2, Uvicorn, PBKDF2-HMAC-SHA256 Password Hashing
+- **Security**: Server-Side RBAC, Session Tokens, In-Memory Sliding-Window Rate Limiting, Production Lockout
 - **Architecture**: REST API with single-port unified deployment and dual-port dev proxy
 
 ---
 
-## 🚀 Key Features
+## 🔒 Security & Architecture Hardening (P0 / P1)
 
-### 1. Authentication & Persistent Sessions
-- **Secure Password Hashing**: PBKDF2-HMAC-SHA256 with cryptographically random salts.
-- **Session Tokens**: 32-byte cryptographically secure hexadecimal tokens stored in SQLite and persisted in `localStorage`.
-- **1-Click Quick Demo Sign-In**: Instant login buttons for seeded demo profiles (*Aarav Sharma*, *Priya Nair*, *Devansh Patel*, *Ananya Deshmukh*).
-- **Full Signup & Login Flow**: Custom registration with technical role, locality, goals, and skill tags.
+### 1. Server-Side Authentication & Session Validation
+- **No Client Trust**: Client-supplied `user_id`, roles, or organizer IDs are never accepted as proof of authorization. All protected requests strictly validate the `Authorization: Bearer <token>` session header on the server.
+- **Removed Dangerous Silent Fallbacks**: Eliminated previous default-admin fallbacks that granted administrative privileges to unauthenticated requests.
+- **Sliding-Window Rate Limiting**: Added in-memory rate limiting to `POST /api/auth/login` (maximum 5 failed attempts per IP within a 60-second window) to block brute-force attacks.
+- **Secure Password Storage**: Passwords hashed using PBKDF2-HMAC-SHA256 with cryptographically random 16-byte salts.
 
-### 2. Multi-Step Event Registration & "My Passes" Dashboard
-- **3-Step Attendee Registration Flow**:
-  1. *Attendee Details*: Name, email, phone, t-shirt size (S/M/L/XL), dietary preferences, and GitHub / LinkedIn link.
-  2. *Review & Confirmation*: Order breakdown with free pass terms.
-  3. *Digital Ticket Pass*: Stylized printable pass with unique ticket code (`ES-XXXX-XXXXXX`), QR verification placeholder, venue, and date.
-- **Capacity Management**: Live seat counters decrement available capacity and prevent duplicate registrations.
-- **My Passes Hub**: View all confirmed passes, inspect ticket details, or cancel registrations to release seats back to the community.
+### 2. Role-Based Access Control (RBAC) & Ownership
+- **Attendees**: Can view, register for events, manage their own bookmarks, cancel only their own tickets, and update their own profile.
+- **Event Organizers**: Can create events, edit only events they own (`PUT /api/events/{id}`), delete only events they own (`DELETE /api/events/{id}`), and view their scoped organizer metrics.
+- **Platform Administrators**: Can inspect moderation queues, review user reports, unpublish scam listings, inspect audit logs, and trigger demo database resets in non-production environments.
 
-### 3. Opportunity Radar (AI Personalized Recommendations)
-- **4-Factor Explainable Match Scoring (0–100%)**:
-  - *Goal Alignment (35%)*: Matches event format and focus to developer goals (*Win Hackathons*, *AI Upskilling*, *Find Co-founders*).
-  - *Skill Synergy (30%)*: Evaluates technical stack overlap (e.g. React, PyTorch, FastAPI).
-  - *Domain Fit (20%)*: Aligns with developer interests (Generative AI, Web3, HealthTech).
-  - *Practicality (15%)*: Weights free admission and same-locality proximity.
-- **Dynamic Filters**: Filter recommendations by maximum budget.
+### 3. Production Safety Lock for Administrative Endpoints
+- `POST /api/admin/reset` requires verified platform administrator credentials.
+- In production (`ENVIRONMENT=production` and `ALLOW_DEMO_RESET!=true`), the endpoint is strictly disabled and returns `403 Forbidden`.
 
-### 4. Hyperlocal Tech Corridor Discovery & Transit Intelligence
-- **Interactive SVG Map**: Visualizes 9 prominent Bengaluru tech clusters (*Koramangala, Indiranagar, HSR Layout, Whitefield, Electronic City, Central Bangalore, Jayanagar, Bellandur, Yelahanka*) with interactive pins and live counts.
-- **List / Map View Toggle**: Switch effortlessly between the responsive card grid and the interactive corridor map.
-- **Physical Transit Conflict Engine**: Calculates Haversine distance and real-world road factors between back-to-back same-day events. If transit time exceeds the schedule window (e.g., Koramangala to Whitefield in 15 mins), the planner raises a **Physical Travel Conflict Warning**.
+### 4. Concurrency-Safe Atomic Capacity Reservation
+- Registration enforces atomic seat decrement in SQLite:
+  ```sql
+  UPDATE events
+  SET registered_seats = registered_seats + 1
+  WHERE id = ? AND registered_seats < total_seats AND status != 'unpublished'
+  ```
+- Prevents race conditions and over-registration beyond `total_seats`. Duplicate registrations return the existing ticket without double-counting seats.
 
-### 5. TeamMatch 2.0 (Squads & Live Invitations)
-- **Role Complementarity**: Pairs users with non-redundant team members (e.g., Frontend matched with Backend and AI/ML).
-- **Squad Creation**: Create a hackathon team for any upcoming event, specify needed roles, and invite recommended developers.
-- **Live Invitations Dashboard**: Review incoming squad invitations with 1-click **Accept** (joining squad) or **Decline**.
-
-### 6. Trust Intelligence & Admin Moderation Queue
-- **Explainable 0–100 Authenticity Scoring**: Every event receives an auditable trust score based on 7 transparent signals.
-- **Clickable "Why this score?" Breakdown**: Interactive modal detailing earned vs. maximum points for every signal.
-- **Community Reporting**: Community members can flag suspected scams, duplicate clone listings, or venue discrepancies.
-- **Admin Moderation Queue**: Review reported listings with administrative actions: **Dismiss (Authentic)**, **Flag with Warning Banner**, or **Unpublish Listing**.
-
-### 7. Growth Passport & Verified Developer XP
-- **Developer XP & Tier Progression**: Earn XP through registrations, team formations, and hackathon victories. Progress across 4 tiers (*Tier 1: Emerging Explorer* to *Tier 4: Ecosystem Champion*).
-- **Verified Skills Cloud**: Track technical skills endorsed through completed event milestones.
-- **Achievement Badges**: Earn dynamic badges (*First Blood*, *Hackathon Legend*, *Hyperlocal Pioneer*, *Synergy Builder*, *Community Guardian*).
-
-### 8. Community Demand & Local Event Wishlist
-- **Crowdsourced Wishlist**: Ambitious developers suggest events they want to see hosted in their locality.
-- **Live Upvoting**: Community members upvote demands, signaling host interest to local tech organizers.
+### 5. Input Validation & Abuse Prevention
+- Validated via Pydantic v2 models:
+  - `price >= 0.0`
+  - `total_seats >= 1`
+  - Safe URL scheme validation for `source_url` (rejects `javascript:`, `data:`, and malformed URLs)
+  - `date` format validated to ISO `YYYY-MM-DD`
+- Passwords and token secrets are excluded from public responses.
 
 ---
 
-## 🛠️ Windows Setup & Running Instructions
+## 🚀 Key Modules & PS1 Alignment
 
-### Option A: Unified Run (Fastest — Single Port)
-The FastAPI backend serves both the REST API and the pre-built React production frontend from one server.
+### 1. Multi-City & Hyperlocal Distance Discovery
+- **Supported Cities**: Bengaluru, Mumbai, Delhi NCR, Hyderabad, and Pune.
+- **Haversine Distance Engine**: Computes true great-circle distance between user GPS coordinates and event venues.
+- **Distance Radius Filter**: Filter events within 2 km, 5 km, 10 km, or 25 km of your location.
+- **Interactive OpenStreetMap**: Real Leaflet map view showing cluster markers and event venues.
 
-1. **Open PowerShell / Command Prompt** in the project directory:
+### 2. Opportunity Radar (Personalized Matching)
+- **4-Factor Explainable Scoring (0–100%)**:
+  - *Goal Alignment (35%)*: Matches event format to developer goals (*Win Hackathons*, *AI Upskilling*, *Find Teammates*).
+  - *Skill Synergy (30%)*: Evaluates technical stack overlap (e.g. React, PyTorch, FastAPI).
+  - *Domain Fit (20%)*: Aligns with developer interests (Generative AI, Web3, HealthTech).
+  - *Practical Proximity (15%)*: Proximity to attendee's locality and free admission.
+- **Budget Filtering**: Hard constraint enforcement (`max_budget`). Over-budget events are penalized and flagged.
+
+### 3. Trust Intelligence & Safety
+- **Truthful Identity Verification**: Removed misleading "KYC" claims; replaced with transparent **Host Identity Status** and verifiable signal breakdowns.
+- **Duplicate & Clone Detection**: Lexical title similarity and venue matching penalizes duplicate listings and flags mirror events.
+- **Community Reporting & Moderation**: Attendees can report suspicious listings, and administrators can dismiss, flag with warning, or unpublish.
+
+### 4. Organizer Hub & Community Gap Radar
+- **Community Gap Radar**: Aggregates community wishlist demands vs. current catalog supply to identify underserved localities and niches.
+- **1-Click "Host Event for this Demand"**: Organizers can launch an event draft directly from high-demand community gaps.
+- **Full Lifecycle Management**: Create, edit, and delete event listings with real-time occupancy and trust metrics.
+
+### 5. Smart Planner & Transit Conflict Intelligence
+- **Time Overlap Detection**: Detects schedule overlaps and suggests non-conflicting alternatives.
+- **Physical Transit Conflict Engine**: Warns attendees when back-to-back offline events in different localities cannot be reached within the available transit buffer.
+
+### 6. TeamMatch 2.0 & Growth Passport
+- **Squad Formation**: Form hackathon squads, specify needed skill sets, and invite complementary teammates.
+- **Growth Passport**: Earn developer XP across 4 tiers (*Emerging Explorer* to *Ecosystem Champion*) with verified skill badges.
+
+---
+
+## 👥 Evaluator Demo Personas
+
+For evaluator convenience, 1-click quick login buttons are available in the sign-in modal:
+
+| Persona | Name | Email | Password | Role / Access Level |
+|---|---|---|---|---|
+| **Attendee** | Aarav Sharma | `aarav.sharma@demo.eventsphere.io` | `password123` | Standard Attendee (Passes, Planner, TeamMatch) |
+| **Organizer** | Karan Verma | `organizer@demo.eventsphere.io` | `password123` | Event Host (Host Hub, Event Editing, Gaps) |
+| **Admin** | System Admin | `admin@demo.eventsphere.io` | `password123` | Platform Administrator (Moderation, Audits, Reset) |
+| **Teammate** | Priya Nair | `priya.nair@demo.eventsphere.io` | `password123` | Backend Developer (TeamMatch candidate) |
+
+---
+
+## 🛠️ Running the Application
+
+### Option A: Unified Single-Port Run (Fastest)
+The FastAPI backend serves both the REST API and the pre-built React production frontend from port 8000.
+
+1. **Navigate to the backend directory**:
    ```powershell
-   cd vecna
+   cd d:\EventSphere\backend
    ```
 
-2. **Install Python backend dependencies**:
+2. **Start the unified server**:
    ```powershell
-   pip install fastapi uvicorn pydantic
-   ```
-
-3. **Start the server**:
-   ```powershell
-   cd backend
    python main.py
    ```
 
-4. **Open in browser**:
+3. **Open in browser**:
    👉 **`http://127.0.0.1:8000`**
 
 ---
 
 ### Option B: Development Mode (Dual Port with Hot Reload)
-Run backend and frontend independently with Vite's proxy for live code editing.
 
 1. **Terminal 1: Start Backend**
    ```powershell
-   cd vecna\backend
+   cd d:\EventSphere\backend
    python -m uvicorn main:app --reload --port 8000
    ```
-   *FastAPI Docs available at: `http://127.0.0.1:8000/docs`*
+   *FastAPI Interactive OpenAPI Docs: `http://127.0.0.1:8000/docs`*
 
 2. **Terminal 2: Start Frontend**
    ```powershell
-   cd vecna\frontend
-   npm install
+   cd d:\EventSphere\frontend
    npm run dev
    ```
-   *Frontend dev server available at: `http://localhost:5173`*
+   *Vite Frontend available at: `http://localhost:5173`*
 
 ---
 
-## 🧪 Running the Verification Test Suites
+## 🧪 Verification Test Suites
 
-To verify all database schemas, seed data, trust calculations, duplicate detection, schedule conflict alerts, TeamMatch algorithms, and stage upgrades:
+EventSphere includes 3 comprehensive test suites verifying database integrity, security posture, RBAC, and PS1 requirements:
 
 ```powershell
-cd vecna\backend
+cd d:\EventSphere\backend
+
+# 1. Full Security & PS1 Regression Suite (12 tests)
+python test_security_and_ps1.py
+
+# 2. MVP End-to-End Validation Suite
 python test_mvp.py
+
+# 3. Stage 1 & Upgrades Suite
 python test_upgrades.py
 ```
 
-Expected output:
-```text
-=== STARTING EVENTSPHERE MVP END-TO-END VALIDATION ===
-[OK] Database Initialized: 16 events seeded, 8 demo users seeded
-[OK] Event Discovery Working: Found 'HyperHack 2026: AI & Agents Global Hackathon'
-[OK] Trust Intelligence Working: Score = 100/100, Tier = 'High Trust'
-[OK] Duplicate Detection Working: Mirror Event flagged = True, Score penalized to 5/100
-[OK] Smart Planner Working: Overlap of 240 mins detected, recommended alternative suggested
-[OK] TeamMatch Algorithm Working: Priya Nair (Backend) matches with 96% compatibility
-[OK] Organizer Event Publishing Working: Created and validated new event
-ALL FULL-STACK MVP VERIFICATION TESTS PASSED SUCCESSFULLY!
-
-=== TESTING EVENTSPHERE STAGE 1 & FULL UPGRADES ===
-[OK] Auth Login Working: User 'Aarav Sharma' logged in
-[OK] Auth Signup Working: User created
-[OK] Event Registration Working: Registration saved
-[OK] My Events Dashboard Working: Found registered passes with ticket code ES-...
-[OK] Opportunity Radar Working: Radar score & 4-factor explanation
-[OK] Hyperlocal Discovery Working: 9 active clusters mapped
-[OK] TeamMatch 2.0 Team Creation Working: Team created & invitation sent
-[OK] Growth Passport Working: Developer XP (1410 XP, Ecosystem Champion)
-[OK] Community Demand Working: Wishlist voting verified
-[OK] Trust & Safety Reporting Working: Report submitted & moderation queue actioned
-ALL STAGE 1 & FULL UPGRADE BACKEND TESTS PASSED!
-```
-
----
-
-## 🎯 Main Demo Journey for Judges
-
-1. **Discover & Map View**: Browse the 16 seeded events. Click **"Map View"** to inspect the interactive Bengaluru tech cluster map (Koramangala, Indiranagar, Whitefield, etc.).
-2. **Inspect Trust Intelligence**: Click on the trust badge on any card to view the **"Why this score?"** audit.
-3. **Attendee Registration & Ticket Pass**: Click **"Register"** on any event. Fill out the 3-step attendee form with t-shirt size and diet, confirm, and receive your digital ticket pass with unique code (`ES-...`).
-4. **Opportunity Radar**: Navigate to the **Radar** tab. Review personalized AI matches based on your goals and technical skills with explainable 4-factor scores.
-5. **Smart Planner & Mobility Conflicts**: Switch to the **Planner** tab. Observe both time overlap warnings and hyperlocal physical transit conflict warnings.
-6. **TeamMatch 2.0 & Squads**: Switch to **TeamMatch 2.0**. Review recommendations, switch to **Active Squads** to assemble a team, and check **Invitations**.
-7. **Growth Passport**: Navigate to **Passport** to inspect your developer XP bar, Tier title (*Ecosystem Champion*), verified skill cloud, and dynamic badges.
-8. **Community Wishlist**: Switch to **Wishlist** to upvote requested local events or submit a new community suggestion.
-9. **Organizer Hub & Moderation Queue**: Switch to **Host & Admin**. View real-time platform statistics, publish a new verified event, and open the **Admin Moderation Queue** to review or unpublish reported listings.
-10. **Reset Seeds**: Click **"Reset Seeds"** in the top navigation bar at any point to restore the clean initial demonstration dataset.
+### Verified Test Summary:
+- `test_security_and_ps1.py`: **12/12 PASSED (100%)**
+  1. Unauthenticated administrative requests rejected (401)
+  2. Non-admin users cannot access admin endpoints (403)
+  3. Organizers cannot edit or delete other organizers' events (403)
+  4. Attendees cannot view or cancel other attendees' passes (403)
+  5. Invalid input (negative prices, 0 seats, unsafe URLs, bad dates) rejected (422)
+  6. Capacity limits prevent over-registration atomically
+  7. Duplicate registrations prevented
+  8. Authorized organizer and attendee workflows functioning
+  9. Legitimate administrator workflow functioning
+  10. Destructive reset locked in production environments
+  11. Multi-city and coordinate distance filtering functioning
+  12. Community Gap Radar calculating demand vs supply
+- `test_mvp.py`: **100% PASSED**
+- `test_upgrades.py`: **100% PASSED**
+- Frontend Build (`npm run build`): **0 errors (100% PASSED)**

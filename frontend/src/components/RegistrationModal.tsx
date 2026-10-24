@@ -13,9 +13,11 @@ import {
   Phone, 
   Shirt, 
   Utensils, 
-  ExternalLink,
-  ShieldCheck,
-  QrCode
+  ExternalLink, 
+  ShieldCheck, 
+  QrCode,
+  Download,
+  CalendarPlus
 } from 'lucide-react';
 import { EventItem, UserProfile } from '../types';
 import { registerForEvent } from '../api';
@@ -23,7 +25,7 @@ import { registerForEvent } from '../api';
 interface Props {
   event: EventItem | null;
   isOpen: boolean;
-  currentUser: UserProfile;
+  currentUser: UserProfile | null;
   onClose: () => void;
   onRegistrationSuccess: (ticketInfo: any) => void;
   onNavigateToMyEvents?: () => void;
@@ -59,7 +61,7 @@ export const RegistrationModal: React.FC<Props> = ({
       return;
     }
     setError(null);
-    setStep(2); // Go to review step
+    setStep(2);
   };
 
   const handleConfirmRegistration = async () => {
@@ -76,8 +78,9 @@ export const RegistrationModal: React.FC<Props> = ({
         github_linkedin: githubLinkedin
       });
 
+      const uniqueCode = `ES-${event.id.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4)}-${Math.floor(100000 + Math.random() * 900000)}`;
       const ticketData = res.ticket || {
-        ticket_code: res.already_registered ? (event.user_ticket_code || 'ES-CONFIRMED') : `ES-${event.id.toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        ticket_code: res.already_registered ? (event.user_ticket_code || 'ES-CONFIRMED-884920') : uniqueCode,
         event_title: event.title,
         attendee_name: attendeeName,
         attendee_email: attendeeEmail,
@@ -89,7 +92,7 @@ export const RegistrationModal: React.FC<Props> = ({
 
       setConfirmedTicket(ticketData);
       onRegistrationSuccess(ticketData);
-      setStep(3); // Go to final confirmed ticket pass step
+      setStep(3);
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');
     } finally {
@@ -105,37 +108,37 @@ export const RegistrationModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 dark:bg-navy-950/85 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 dark:bg-black/80 backdrop-blur-md animate-fade-in">
       <div 
-        className="bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-3xl max-w-xl w-full max-h-[92vh] overflow-y-auto shadow-2xl p-6 relative text-slate-900 dark:text-slate-100 transition-colors"
+        className="bg-surface border border-theme rounded-3xl max-w-xl w-full max-h-[92vh] overflow-y-auto shadow-elevated p-6 sm:p-8 relative text-main transition-colors"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={resetAndClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors"
+          className="absolute top-5 right-5 text-muted hover:text-main p-1 rounded-xl hover:bg-surface-secondary transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
-        {/* Multi-Step Progress Indicator */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between max-w-xs mx-auto mb-2 text-xs font-bold">
-            <span className={step >= 1 ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400 dark:text-slate-500'}>1. Details</span>
-            <span className="text-slate-300 dark:text-slate-600">→</span>
-            <span className={step >= 2 ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400 dark:text-slate-500'}>2. Review</span>
-            <span className="text-slate-300 dark:text-slate-600">→</span>
-            <span className={step === 3 ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400 dark:text-slate-500'}>3. Ticket Pass</span>
+        {/* Stepper Header (Screen 6) */}
+        <div className="mb-6 space-y-2.5">
+          <div className="flex items-center justify-between max-w-xs mx-auto text-xs font-bold">
+            <span className={step >= 1 ? 'text-brand' : 'text-muted'}>1. Details</span>
+            <span className="text-muted">→</span>
+            <span className={step >= 2 ? 'text-brand' : 'text-muted'}>2. Review</span>
+            <span className="text-muted">→</span>
+            <span className={step === 3 ? 'text-brand' : 'text-muted'}>3. Pass Issued</span>
           </div>
-          <div className="w-full bg-slate-100 dark:bg-navy-950 rounded-full h-1.5 overflow-hidden border border-slate-200 dark:border-navy-800">
+          <div className="w-full bg-surface-secondary rounded-full h-1.5 overflow-hidden border border-theme">
             <div 
-              className="h-full bg-gradient-to-r from-violet-600 to-teal-400 transition-all duration-300"
+              className="h-full bg-brand transition-all duration-300"
               style={{ width: `${(step / 3) * 100}%` }}
             />
           </div>
         </div>
 
         {error && (
-          <div className="p-3 mb-4 rounded-2xl bg-rose-50 dark:bg-rose-950/80 border border-rose-200 dark:border-rose-500/40 text-rose-700 dark:text-rose-300 text-xs font-semibold">
+          <div className="p-3 mb-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold">
             {error}
           </div>
         )}
@@ -143,42 +146,42 @@ export const RegistrationModal: React.FC<Props> = ({
         {/* STEP 1: ATTENDEE FORM */}
         {step === 1 && (
           <div>
-            <div className="mb-4">
-              <span className="text-[10px] uppercase font-bold text-teal-600 dark:text-teal-400 tracking-wider">Step 1 of 3</span>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white leading-snug">Attendee Registration Details</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                For: <span className="text-slate-800 dark:text-slate-200 font-bold">{event.title}</span>
+            <div className="mb-5">
+              <span className="text-[10px] uppercase font-bold text-brand tracking-wider">Step 1 of 3</span>
+              <h3 className="text-xl font-extrabold text-main leading-snug">Attendee Registration</h3>
+              <p className="text-xs text-secondary mt-0.5">
+                Registering for: <span className="text-main font-bold">{event.title}</span>
               </p>
             </div>
 
-            <form onSubmit={handleDetailsSubmit} className="space-y-3.5 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <form onSubmit={handleDetailsSubmit} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Full Name *</label>
+                  <label className="block text-[11px] font-bold text-main mb-1">Full Name *</label>
                   <div className="relative">
-                    <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <User className="w-4 h-4 text-muted absolute left-3 top-2.5" />
                     <input
                       type="text"
                       required
                       value={attendeeName}
                       onChange={(e) => setAttendeeName(e.target.value)}
-                      placeholder="Your name"
-                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
+                      placeholder="Your full name"
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-secondary border border-theme text-main focus:outline-none focus:border-brand"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Email Address *</label>
+                  <label className="block text-[11px] font-bold text-main mb-1">Email Address *</label>
                   <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <Mail className="w-4 h-4 text-muted absolute left-3 top-2.5" />
                     <input
                       type="email"
                       required
                       value={attendeeEmail}
                       onChange={(e) => setAttendeeEmail(e.target.value)}
                       placeholder="name@example.com"
-                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-secondary border border-theme text-main focus:outline-none focus:border-brand"
                     />
                   </div>
                 </div>
@@ -186,27 +189,27 @@ export const RegistrationModal: React.FC<Props> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Phone Number</label>
+                  <label className="block text-[11px] font-bold text-main mb-1">Phone Number</label>
                   <div className="relative">
-                    <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <Phone className="w-4 h-4 text-muted absolute left-3 top-2.5" />
                     <input
                       type="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+91 98765 43210"
-                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-secondary border border-theme text-main focus:outline-none focus:border-brand"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">T-Shirt Size</label>
+                  <label className="block text-[11px] font-bold text-main mb-1">T-Shirt Size</label>
                   <div className="relative">
-                    <Shirt className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <Shirt className="w-4 h-4 text-muted absolute left-3 top-2.5" />
                     <select
                       value={tshirtSize}
                       onChange={(e) => setTshirtSize(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-secondary border border-theme text-main focus:outline-none focus:border-brand cursor-pointer"
                     >
                       <option value="S">Small (S)</option>
                       <option value="M">Medium (M)</option>
@@ -218,13 +221,13 @@ export const RegistrationModal: React.FC<Props> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Dietary Preference</label>
+                  <label className="block text-[11px] font-bold text-main mb-1">Meal Preference</label>
                   <div className="relative">
-                    <Utensils className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <Utensils className="w-4 h-4 text-muted absolute left-3 top-2.5" />
                     <select
                       value={dietary}
                       onChange={(e) => setDietary(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-secondary border border-theme text-main focus:outline-none focus:border-brand cursor-pointer"
                     >
                       <option value="None">Standard / Any</option>
                       <option value="Vegetarian">Vegetarian</option>
@@ -236,32 +239,32 @@ export const RegistrationModal: React.FC<Props> = ({
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  GitHub / Portfolio / LinkedIn URL
+                <label className="block text-[11px] font-bold text-main mb-1">
+                  GitHub / Portfolio / LinkedIn
                 </label>
                 <div className="relative">
-                  <ExternalLink className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <ExternalLink className="w-4 h-4 text-muted absolute left-3 top-2.5" />
                   <input
                     type="text"
                     value={githubLinkedin}
                     onChange={(e) => setGithubLinkedin(e.target.value)}
                     placeholder="github.com/yourhandle"
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 text-slate-900 dark:text-white focus:outline-none focus:border-violet-500"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-secondary border border-theme text-main focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-3 flex justify-end gap-2 border-t border-theme">
                 <button
                   type="button"
                   onClick={resetAndClose}
-                  className="px-4 py-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white font-semibold"
+                  className="px-4 py-2 rounded-xl text-secondary hover:text-main font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-teal-500 text-white font-bold hover:brightness-110 active:scale-95 transition-all shadow-md shadow-violet-900/20"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand hover:bg-brand-hover text-white font-bold transition-all shadow-md shadow-brand/20 cursor-pointer active:scale-95"
                 >
                   <span>Review Pass Order</span>
                   <ArrowRight className="w-4 h-4" />
@@ -274,67 +277,69 @@ export const RegistrationModal: React.FC<Props> = ({
         {/* STEP 2: REVIEW & CONFIRM */}
         {step === 2 && (
           <div>
-            <div className="mb-4">
-              <span className="text-[10px] uppercase font-bold text-teal-600 dark:text-teal-400 tracking-wider">Step 2 of 3</span>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white">Review Registration Summary</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Verify details before digital ticket issuance.
+            <div className="mb-5">
+              <span className="text-[10px] uppercase font-bold text-brand tracking-wider">Step 2 of 3</span>
+              <h3 className="text-xl font-extrabold text-main">Review Pass Order</h3>
+              <p className="text-xs text-secondary mt-0.5">
+                Verify details before digital ticket generation.
               </p>
             </div>
 
-            <div className="space-y-3.5 text-xs">
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 space-y-2">
-                <div className="font-bold text-sm text-slate-900 dark:text-white">{event.title}</div>
-                <div className="text-slate-600 dark:text-slate-300 flex items-center gap-2">
-                  <Calendar className="w-3.5 h-3.5 text-violet-500" />
-                  <span>{event.date} • {event.start_time} - {event.end_time}</span>
+            <div className="space-y-4 text-xs">
+              <div className="p-4 rounded-2xl bg-surface-secondary border border-theme space-y-2">
+                <div className="font-bold text-sm text-main">{event.title}</div>
+                <div className="text-secondary flex items-center gap-2">
+                  <Calendar className="w-3.5 h-3.5 text-brand" />
+                  <span>{event.date} • {event.start_time} - {event.end_time} IST</span>
                 </div>
-                <div className="text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                <div className="text-secondary flex items-center gap-2">
                   <MapPin className="w-3.5 h-3.5 text-rose-500" />
                   <span>{event.venue}, {event.city}</span>
                 </div>
-                <div className="text-slate-600 dark:text-slate-300 flex items-center gap-2">
-                  <Ticket className="w-3.5 h-3.5 text-teal-500" />
-                  <span>Pass Tier: <strong className="text-slate-900 dark:text-white">{event.price_type === 'free' ? 'Complimentary Community Pass' : `Standard ($${event.price})`}</strong></span>
+                <div className="text-secondary flex items-center gap-2">
+                  <Ticket className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>
+                    Pass Tier: <strong className="text-main">{event.price_type === 'free' ? 'Complimentary Community Pass' : `Standard (₹${event.price})`}</strong>
+                  </span>
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-navy-950 border border-slate-200 dark:border-navy-800 grid grid-cols-2 gap-2 text-[11px]">
+              <div className="p-4 rounded-2xl bg-surface-secondary border border-theme grid grid-cols-2 gap-3 text-[11px]">
                 <div>
-                  <span className="text-slate-400">Attendee Name:</span>
-                  <div className="font-bold text-slate-800 dark:text-slate-200">{attendeeName}</div>
+                  <span className="text-muted">Attendee:</span>
+                  <div className="font-bold text-main">{attendeeName}</div>
                 </div>
                 <div>
-                  <span className="text-slate-400">Email:</span>
-                  <div className="font-bold text-slate-800 dark:text-slate-200">{attendeeEmail}</div>
+                  <span className="text-muted">Email:</span>
+                  <div className="font-bold text-main truncate">{attendeeEmail}</div>
                 </div>
                 <div>
-                  <span className="text-slate-400">T-Shirt & Diet:</span>
-                  <div className="font-bold text-slate-800 dark:text-slate-200">Size {tshirtSize} • {dietary}</div>
+                  <span className="text-muted">T-Shirt & Diet:</span>
+                  <div className="font-bold text-main">Size {tshirtSize} • {dietary}</div>
                 </div>
                 <div>
-                  <span className="text-slate-400">Portfolio:</span>
-                  <div className="font-bold text-slate-800 dark:text-slate-200 truncate">{githubLinkedin || 'None'}</div>
+                  <span className="text-muted">Portfolio:</span>
+                  <div className="font-bold text-main truncate">{githubLinkedin || 'None'}</div>
                 </div>
               </div>
 
-              <label className="flex items-start gap-2 cursor-pointer p-1">
+              <label className="flex items-start gap-2.5 cursor-pointer p-1">
                 <input
                   type="checkbox"
                   checked={agreedTerms}
                   onChange={(e) => setAgreedTerms(e.target.checked)}
-                  className="rounded border-slate-300 dark:border-navy-700 text-violet-600 focus:ring-violet-500 mt-0.5"
+                  className="rounded border-theme text-brand focus:ring-brand mt-0.5 cursor-pointer"
                 />
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
-                  I commit to attending this community event. If I cannot attend, I will cancel via <strong>My Passes</strong> to release capacity for waitlisted developers.
+                <span className="text-[11px] text-secondary leading-tight">
+                  I commit to attending this community event. If unable to attend, I will cancel via <strong>My Passes</strong> to release capacity for waitlisted developers.
                 </span>
               </label>
 
-              <div className="pt-2 flex justify-between gap-2">
+              <div className="pt-3 flex justify-between gap-2 border-t border-theme">
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="px-4 py-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white font-semibold"
+                  className="px-4 py-2 rounded-xl text-secondary hover:text-main font-semibold cursor-pointer"
                 >
                   ← Edit Details
                 </button>
@@ -342,7 +347,7 @@ export const RegistrationModal: React.FC<Props> = ({
                   type="button"
                   disabled={!agreedTerms || loading}
                   onClick={handleConfirmRegistration}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-teal-500 text-white font-bold hover:brightness-110 active:scale-95 transition-all shadow-md shadow-violet-900/20 disabled:opacity-50"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand hover:bg-brand-hover text-white font-bold transition-all shadow-md shadow-brand/20 disabled:opacity-50 cursor-pointer active:scale-95"
                 >
                   {loading ? 'Securing Seat...' : 'Confirm Free Registration'}
                 </button>
@@ -351,73 +356,89 @@ export const RegistrationModal: React.FC<Props> = ({
           </div>
         )}
 
-        {/* STEP 3: TICKET PASS CONFIRMED */}
+        {/* STEP 3: TICKET PASS CONFIRMED (Screen 7) */}
         {step === 3 && confirmedTicket && (
-          <div className="space-y-4 animate-fade-in text-center">
-            <div className="w-12 h-12 mx-auto rounded-full bg-emerald-500/20 border border-emerald-500 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+          <div className="space-y-5 animate-fade-in text-center">
+            <div className="w-12 h-12 mx-auto rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
               <CheckCircle2 className="w-7 h-7" />
             </div>
 
             <div>
-              <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">Registration Confirmed!</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Your entry badge has been verified in the EventSphere database.
+              <h3 className="text-2xl font-black text-main">Registration Confirmed!</h3>
+              <p className="text-xs text-secondary mt-1">
+                Your digital entry badge has been recorded in the EventSphere ledger.
               </p>
             </div>
 
-            {/* Stylized Printable Ticket Pass */}
-            <div className="relative p-5 rounded-3xl bg-slate-50 dark:bg-gradient-to-b dark:from-navy-850 dark:to-navy-950 border border-slate-200 dark:border-navy-700 shadow-xl text-left overflow-hidden">
-              <div className="flex items-start justify-between gap-3 pb-3 border-b border-dashed border-slate-200 dark:border-navy-700">
-                <div>
-                  <div className="text-[10px] uppercase font-bold text-teal-600 dark:text-teal-400 tracking-wider">Official Event Pass</div>
-                  <h4 className="text-base font-bold text-slate-900 dark:text-white mt-0.5">{confirmedTicket.event_title}</h4>
+            {/* Stylized Perforated Ticket Card (Screen 7) */}
+            <div className="relative rounded-3xl bg-surface-secondary border border-theme shadow-card text-left overflow-hidden">
+              {/* Left & Right Notch Cutouts for ticket perforated look */}
+              <div className="absolute top-1/2 -left-3 -translate-y-1/2 w-6 h-6 rounded-full bg-surface border border-theme" />
+              <div className="absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 rounded-full bg-surface border border-theme" />
+
+              {/* Pass Top header */}
+              <div className="p-5 border-b border-dashed border-theme flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="text-[10px] uppercase font-bold text-brand tracking-wider">
+                    Official Event Pass
+                  </div>
+                  <h4 className="text-base font-extrabold text-main leading-snug">
+                    {confirmedTicket.event_title}
+                  </h4>
                 </div>
-                <div className="p-2 rounded-xl bg-white dark:bg-navy-900 border border-slate-200 dark:border-navy-700 shrink-0">
-                  <QrCode className="w-8 h-8 text-slate-700 dark:text-slate-300" />
+                <div className="p-2.5 rounded-2xl bg-surface border border-theme shadow-inner shrink-0">
+                  <QrCode className="w-9 h-9 text-brand" />
                 </div>
               </div>
 
-              <div className="py-3 grid grid-cols-2 gap-3 text-xs border-b border-dashed border-slate-200 dark:border-navy-700">
+              {/* Pass Details Grid */}
+              <div className="p-5 grid grid-cols-2 gap-4 text-xs border-b border-dashed border-theme">
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Attendee</span>
-                  <div className="font-bold text-slate-900 dark:text-white">{confirmedTicket.attendee_name}</div>
-                  <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{confirmedTicket.attendee_email}</div>
+                  <span className="text-[10px] text-muted uppercase font-bold">Attendee</span>
+                  <div className="font-extrabold text-main mt-0.5">{confirmedTicket.attendee_name}</div>
+                  <div className="text-[10px] text-secondary truncate">{confirmedTicket.attendee_email}</div>
                 </div>
 
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Ticket Pass Code</span>
-                  <div className="font-mono font-bold text-violet-600 dark:text-violet-400 text-sm tracking-wide">
+                  <span className="text-[10px] text-muted uppercase font-bold">Ticket Pass Code</span>
+                  <div className="font-mono font-black text-brand text-sm mt-0.5 tracking-wider">
                     {confirmedTicket.ticket_code}
                   </div>
                 </div>
 
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Date & Time</span>
-                  <div className="font-semibold text-slate-700 dark:text-slate-300">{confirmedTicket.date}</div>
-                  <div className="text-[10px] text-slate-500 dark:text-slate-400">{confirmedTicket.time} IST</div>
+                  <span className="text-[10px] text-muted uppercase font-bold">Date & Time</span>
+                  <div className="font-semibold text-main mt-0.5">{confirmedTicket.date}</div>
+                  <div className="text-[10px] text-secondary">{confirmedTicket.time}</div>
                 </div>
 
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Venue</span>
-                  <div className="font-semibold text-slate-700 dark:text-slate-300 truncate">{confirmedTicket.venue}</div>
+                  <span className="text-[10px] text-muted uppercase font-bold">Venue</span>
+                  <div className="font-semibold text-main mt-0.5 truncate">{confirmedTicket.venue}</div>
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center justify-between text-[10px] text-slate-400">
-                <span>Verified by EventSphere Security</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-bold">STATUS: CONFIRMED</span>
+              {/* Security Footer */}
+              <div className="px-5 py-3 bg-surface/50 flex items-center justify-between text-[10px] text-muted font-medium">
+                <span className="flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Verified by EventSphere Security</span>
+                </span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">
+                  CONFIRMED
+                </span>
               </div>
             </div>
 
-            <div className="pt-2 flex flex-col sm:flex-row gap-2">
+            {/* Bottom Actions */}
+            <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
               <button
                 type="button"
-                onClick={() => {
-                  window.print();
-                }}
-                className="flex-1 py-2 rounded-xl bg-slate-100 dark:bg-navy-800 hover:bg-slate-200 dark:hover:bg-navy-700 text-slate-700 dark:text-slate-200 text-xs font-semibold border border-slate-200 dark:border-navy-700 transition-colors"
+                onClick={() => window.print()}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-surface hover:bg-surface-secondary text-secondary hover:text-main text-xs font-bold border border-theme transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
-                Print / Save Pass
+                <Download className="w-3.5 h-3.5" />
+                <span>Save Ticket</span>
               </button>
 
               <button
@@ -426,9 +447,10 @@ export const RegistrationModal: React.FC<Props> = ({
                   resetAndClose();
                   if (onNavigateToMyEvents) onNavigateToMyEvents();
                 }}
-                className="flex-1 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-teal-500 text-white text-xs font-bold hover:brightness-110 active:scale-95 transition-all shadow-md shadow-violet-900/20"
+                className="flex-1 py-2.5 px-3 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-bold transition-all shadow-md shadow-brand/20 cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
               >
-                View in My Passes →
+                <span>View in My Passes</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>

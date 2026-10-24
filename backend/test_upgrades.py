@@ -47,12 +47,12 @@ def test_upgrades():
         dietary="Vegetarian",
         github_linkedin="github.com/aaravsharma"
     )
-    reg_res = main.register_for_event("ev-2", reg_req)
+    reg_res = main.register_for_event("ev-2", reg_req, authorization=f"Bearer {token}")
     assert reg_res["registered"] or reg_res.get("already_registered"), "Registration failed"
     print(f"[OK] Event Registration Working: {reg_res['message']}")
 
     # 2b. Test My Registrations Dashboard API
-    my_regs = main.get_my_registrations(authorization=f"Bearer {token}", user_id="u-1")
+    my_regs = main.get_my_registrations(authorization=f"Bearer {token}")
     assert my_regs["count"] >= 1, "Expected at least 1 registration"
     first_reg = my_regs["registrations"][0]
     print(f"[OK] My Events Dashboard Working: Found {my_regs['count']} registered passes. Ticket: {first_reg.get('ticket_code')} ({first_reg.get('status')})")
@@ -109,9 +109,22 @@ def test_upgrades():
     rep_res = main.report_event("ev-15", ReportCreateRequest(reason="duplicate", details="Suspicious mirror listing"), authorization=f"Bearer {token}", user_id="u-1")
     print(f"[OK] Trust & Safety Reporting Working: Report submitted ID '{rep_res['report_id']}'")
 
-    admin_reports = main.list_reports(status_filter="pending")
+    # 8b. Test Admin Moderation Queue with Admin Credentials
+    from fastapi import HTTPException
+    # Ordinary user access must be rejected
+    try:
+        main.list_reports(status_filter="pending", authorization=f"Bearer {token}")
+        assert False, "Ordinary user was able to access admin reports!"
+    except HTTPException as e:
+        assert e.status_code == 403, f"Expected 403, got {e.status_code}"
+        print("[OK] RBAC Enforced: Non-admin user access to admin reports rejected with 403 Forbidden")
+
+    # Authenticated Admin access succeeds
+    admin_login = main.login(UserLogin(email="admin@demo.eventsphere.io", password="password123"))
+    admin_token = f"Bearer {admin_login['token']}"
+    admin_reports = main.list_reports(status_filter="pending", authorization=admin_token)
     assert admin_reports["count"] >= 1, "Expected report in admin queue"
-    print(f"[OK] Admin Moderation Queue Working: {admin_reports['count']} pending reports in queue")
+    print(f"[OK] Admin Moderation Queue Working: {admin_reports['count']} pending reports in queue accessed by Admin")
 
     print("\nALL STAGE 1 & FULL UPGRADE BACKEND TESTS PASSED!")
 

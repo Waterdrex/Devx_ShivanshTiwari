@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: 'class',
+  darkMode: ['class', '[data-theme="dark"]'],
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -8,25 +8,63 @@ export default {
   theme: {
     extend: {
       colors: {
+        page: 'var(--bg-page)',
+        surface: 'var(--bg-surface)',
+        'surface-secondary': 'var(--bg-surface-secondary)',
+        elevated: 'var(--bg-elevated)',
+        'hover-surface': 'var(--bg-hover)',
+        main: 'var(--text-main)',
+        secondary: 'var(--text-secondary)',
+        muted: 'var(--text-muted)',
+        theme: 'var(--border-theme)',
+        'theme-subtle': 'var(--border-subtle)',
+        brand: {
+          DEFAULT: 'var(--brand-purple)',
+          hover: 'var(--brand-purple-hover)',
+          light: 'var(--brand-purple-light)',
+          tint: 'var(--brand-purple-tint)',
+        },
+        status: {
+          success: 'var(--color-success)',
+          warning: 'var(--color-warning)',
+          error: 'var(--color-error)',
+        },
         navy: {
-          950: '#070b19',
-          900: '#0c1228',
-          850: '#111836',
-          800: '#172045',
-          700: '#222f64',
-          600: '#32448a'
+          950: '#0A0D18',
+          900: '#111627',
+          850: '#171E32',
+          800: '#202943',
+          700: '#29324A',
+          600: '#3D4A6E'
         },
         violet: {
-          400: '#a78bfa',
-          500: '#8b5cf6',
-          600: '#7c3aed',
-          700: '#6d28d9',
+          50: '#F0EEFF',
+          100: '#EBE8FE',
+          200: '#DDD7FE',
+          300: '#C4B8FD',
+          400: '#A78BFA',
+          500: '#8B5CF6',
+          600: '#6546F5',
+          700: '#5135DC',
+          800: '#4329B8',
+          900: '#321D8D',
+          950: '#1F1259',
         },
         teal: {
           400: '#2dd4bf',
           500: '#14b8a6',
           600: '#0d9488',
         }
+      },
+      boxShadow: {
+        'card': 'var(--card-shadow)',
+        'card-hover': 'var(--card-shadow-hover)',
+        'subtle': '0 2px 8px -1px rgba(0, 0, 0, 0.06)',
+      },
+      borderRadius: {
+        '2xl': '1rem',
+        '3xl': '1.5rem',
+        '4xl': '2rem',
       }
     },
   },

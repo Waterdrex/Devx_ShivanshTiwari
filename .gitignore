@@ -1,24 +1,23 @@
 # Dependencies
 node_modules/
-dist/
-.vite/
-
-# Python & Environment
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
+*.py[cod]
+*$py.class
 
-# Archives & Temp files
-*.zip
-*.tar.gz
+# Temporary and backup files
+*.bak
+*.tmp
 *.log
+EventSphere-Project.zip
+
+# Environment & IDE
+.env
+.env.local
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
 .DS_Store
 Thumbs.db
-
-# Database backups & local dev state
-*.db.bak

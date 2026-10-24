@@ -76,21 +76,21 @@ def compute_trust_score(event: Dict[str, Any], duplicate_info: Optional[Dict[str
     if organizer_verified:
         score += 20
         signals.append({
-            "name": "Verified Organizer Identity",
+            "name": "Verified Host Identity",
             "score": 20,
             "max": 20,
             "status": "passed",
-            "description": "Organizer has completed official institutional / platform KYC verification."
+            "description": "Host profile authenticated through platform admin review and verified organizational credentials."
         })
     else:
         signals.append({
-            "name": "Organizer Identity Verification",
-            "score": 5,
+            "name": "Host Identity Status",
+            "score": 8,
             "max": 20,
             "status": "warning",
-            "description": "Community organizer without formal government/institution ID check."
+            "description": "Community-submitted listing; host profile has not undergone manual platform authentication."
         })
-        score += 5
+        score += 8
 
     if organizer_email and ("@" in organizer_email and not organizer_email.endswith("@tempmail.com")):
         score += 15
@@ -261,5 +261,5 @@ def compute_trust_score(event: Dict[str, Any], duplicate_info: Optional[Dict[str
         "signals": signals,
         "is_duplicate_flagged": bool(duplicate_info),
         "duplicate_info": duplicate_info,
-        "demo_disclaimer": "Trust indicators and verification signals use algorithmic evaluation with demonstration credentials."
+        "demo_disclaimer": "Trust indicators and verification signals are explainable algorithmic assessments based on contact domain validity, description completeness, venue specificity, duplicate analysis, and community feedback. They do not constitute official KYC or financial guarantees."
     }

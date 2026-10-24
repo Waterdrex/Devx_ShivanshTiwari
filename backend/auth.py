@@ -31,3 +31,19 @@ def verify_password(stored_hash: str, password_attempt: str) -> bool:
 
 def generate_session_token() -> str:
     return secrets.token_hex(32)
+
+# In-memory rate limiting tracker for authentication protection
+_LOGIN_ATTEMPTS: Dict[str, list] = {}
+
+def check_login_rate_limit(key: str, max_attempts: int = 10, window_seconds: int = 60) -> bool:
+    """Returns True if within rate limit, False if rate limit exceeded."""
+    now = datetime.now()
+    attempts = _LOGIN_ATTEMPTS.get(key, [])
+    # Keep attempts within sliding window
+    attempts = [t for t in attempts if (now - t).total_seconds() < window_seconds]
+    if len(attempts) >= max_attempts:
+        _LOGIN_ATTEMPTS[key] = attempts
+        return False
+    attempts.append(now)
+    _LOGIN_ATTEMPTS[key] = attempts
+    return True

@@ -10,7 +10,9 @@ import {
   ModerationReport,
   GrowthPassport,
   CommunityDemand,
-  LocalityInfo
+  LocalityInfo,
+  CityInfo,
+  CommunityGap
 } from './types';
 
 const API_BASE = '/api';
@@ -100,23 +102,44 @@ export async function apiUpdateProfile(payload: Partial<UserProfile>): Promise<U
 }
 
 // ================= EVENTS & DISCOVERY =================
+export async function fetchCities(): Promise<{ count: number; cities: CityInfo[] }> {
+  const res = await fetch(`${API_BASE}/cities`);
+  if (!res.ok) throw new Error('Failed to load supported cities');
+  return res.json();
+}
+
 export async function fetchEvents(params?: {
   search?: string;
   category?: string;
+  city?: string;
   locality?: string;
   price_type?: string;
   format?: string;
   sort_by?: string;
   user_id?: string | null;
+  latitude?: number;
+  longitude?: number;
+  radius_km?: number;
+  bounds?: { min_lat: number; max_lat: number; min_lng: number; max_lng: number };
 }): Promise<{ count: number; events: EventItem[]; demo_mode: boolean }> {
   const query = new URLSearchParams();
   if (params?.search) query.set('search', params.search);
   if (params?.category && params.category !== 'all') query.set('category', params.category);
+  if (params?.city && params.city !== 'all') query.set('city', params.city);
   if (params?.locality && params.locality !== 'all') query.set('locality', params.locality);
   if (params?.price_type && params.price_type !== 'all') query.set('price_type', params.price_type);
   if (params?.format && params.format !== 'all') query.set('format', params.format);
   if (params?.sort_by) query.set('sort_by', params.sort_by);
   if (params?.user_id) query.set('user_id', params.user_id);
+  if (params?.latitude !== undefined && params?.latitude !== null) query.set('latitude', String(params.latitude));
+  if (params?.longitude !== undefined && params?.longitude !== null) query.set('longitude', String(params.longitude));
+  if (params?.radius_km !== undefined && params?.radius_km !== null) query.set('radius_km', String(params.radius_km));
+  if (params?.bounds) {
+    query.set('min_lat', String(params.bounds.min_lat));
+    query.set('max_lat', String(params.bounds.max_lat));
+    query.set('min_lng', String(params.bounds.min_lng));
+    query.set('max_lng', String(params.bounds.max_lng));
+  }
 
   const res = await fetch(`${API_BASE}/events?${query.toString()}`, {
     headers: authHeaders(),
@@ -133,9 +156,22 @@ export async function fetchEventById(id: string, userId = 'u-1'): Promise<EventI
   return res.json();
 }
 
-export async function fetchLocalities(): Promise<{ localities: LocalityInfo[] }> {
-  const res = await fetch(`${API_BASE}/localities`);
+export async function fetchLocalities(city?: string): Promise<{ localities: LocalityInfo[] }> {
+  const url = city ? `${API_BASE}/localities?city=${encodeURIComponent(city)}` : `${API_BASE}/localities`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to load localities');
+  return res.json();
+}
+
+export async function fetchCommunityGaps(city?: string, locality?: string): Promise<{ count: number; gaps: CommunityGap[] }> {
+  const query = new URLSearchParams();
+  if (city) query.set('city', city);
+  if (locality) query.set('locality', locality);
+  const qStr = query.toString();
+  const res = await fetch(`${API_BASE}/community-gaps${qStr ? '?' + qStr : ''}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to load community gap analysis');
   return res.json();
 }
 
@@ -413,6 +449,17 @@ export async function createEvent(eventData: Partial<EventItem>): Promise<{ mess
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail?.[0]?.msg || data.detail || 'Failed to create event');
+  return data;
+}
+
+export async function updateEvent(eventId: string, eventData: Partial<EventItem>): Promise<{ message: string; event: EventItem }> {
+  const res = await fetch(`${API_BASE}/events/${eventId}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(eventData),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail?.[0]?.msg || data.detail || 'Failed to update event');
   return data;
 }
 
