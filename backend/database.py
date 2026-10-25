@@ -2,11 +2,22 @@ import sqlite3
 import json
 import os
 import uuid
+import shutil
 from typing import List, Dict, Any, Optional
 
-DB_FILE = os.path.join(os.path.dirname(__file__), "eventsphere.db")
+SOURCE_DB = os.path.join(os.path.dirname(__file__), "eventsphere.db")
+
+# In Vercel serverless environments, root is read-only; copy pre-seeded DB to /tmp
+if os.environ.get("VERCEL"):
+    DB_FILE = "/tmp/eventsphere.db"
+    if not os.path.exists(DB_FILE) and os.path.exists(SOURCE_DB):
+        shutil.copy2(SOURCE_DB, DB_FILE)
+else:
+    DB_FILE = SOURCE_DB
 
 def get_connection():
+    if os.environ.get("VERCEL") and not os.path.exists(DB_FILE) and os.path.exists(SOURCE_DB):
+        shutil.copy2(SOURCE_DB, DB_FILE)
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     return conn
