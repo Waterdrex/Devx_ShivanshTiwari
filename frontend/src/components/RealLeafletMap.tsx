@@ -37,6 +37,7 @@ interface Props {
   onSelectLocality: (loc: string) => void;
   selectedCategory: string;
   onSelectCategory: (cat: string) => void;
+  selectedCity?: string;
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
   radiusFilter?: string;
@@ -52,6 +53,36 @@ interface Props {
   onHoverEvent?: (id: string | null) => void;
   containerHeight?: string;
 }
+
+// XSS Prevention & URL Sanitization Helpers
+function escapeHtml(str: string | null | undefined): string {
+  if (!str) return '';
+  return String(str).replace(/[&<>'"]/g, (tag) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;',
+  }[tag] || tag));
+}
+
+function sanitizeUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (/^(https?:|\/|data:image\/)/i.test(trimmed)) {
+    return trimmed;
+  }
+  return '';
+}
+
+const CITY_CENTERS: Record<string, [number, number]> = {
+  bengaluru: [12.9716, 77.5946],
+  mumbai: [19.0760, 72.8777],
+  'delhi ncr': [28.6139, 77.2090],
+  delhi: [28.6139, 77.2090],
+  hyderabad: [17.3850, 78.4867],
+  pune: [18.5204, 73.8567],
+};
 
 const DEFAULT_CENTER: [number, number] = [12.9716, 77.5946]; // Central Bengaluru
 const DEFAULT_ZOOM = 12;
@@ -80,6 +111,7 @@ export const RealLeafletMap: React.FC<Props> = ({
   onSelectLocality,
   selectedCategory,
   onSelectCategory,
+  selectedCity = 'Bengaluru',
   searchQuery = '',
   onSearchChange,
   radiusFilter = 'all',
@@ -247,7 +279,7 @@ export const RealLeafletMap: React.FC<Props> = ({
             setActiveEvent(cluster.events[0]);
           }
         });
-        marker.bindTooltip(`<strong>${locName}</strong>: ${cluster.count} Events`, { direction: 'top' });
+        marker.bindTooltip(`<strong>${escapeHtml(locName)}</strong>: ${cluster.count} Events`, { direction: 'top' });
         markersLayer.addLayer(marker);
       });
       return;
@@ -327,9 +359,9 @@ export const RealLeafletMap: React.FC<Props> = ({
 
       marker.bindTooltip(
         `<div style="font-family: inherit; font-size: 11px; padding: 2px 4px;">
-          <strong style="color: ${colors.bg}">${ev.category.replace('_', ' ').toUpperCase()}</strong><br/>
-          <strong>${ev.title}</strong><br/>
-          <span>${ev.price_type === 'free' ? 'FREE' : '₹' + ev.price} • ${ev.locality || 'Bengaluru'}</span>
+          <strong style="color: ${escapeHtml(colors.bg)}">${escapeHtml(ev.category.replace('_', ' ').toUpperCase())}</strong><br/>
+          <strong>${escapeHtml(ev.title)}</strong><br/>
+          <span>${ev.price_type === 'free' ? 'FREE' : '₹' + ev.price} • ${escapeHtml(ev.locality || selectedCity || 'Bengaluru')}</span>
         </div>`,
         { direction: 'top', offset: [0, -30] }
       );
@@ -412,9 +444,9 @@ export const RealLeafletMap: React.FC<Props> = ({
                     🔥 DEMAND GAP: ${gap.gap_score}/100
                   </span>
                 </div>
-                <h4 style="font-weight: 800; font-size: 12px; margin: 4px 0;">${gap.locality} Ecosystem Need</h4>
-                <p style="margin: 2px 0 6px 0; opacity: 0.85;">Suggested Topic: <strong>${gap.suggested_topic}</strong></p>
-                <div style="font-size: 10px; opacity: 0.7;">Category: ${gap.category} • Format: ${gap.suggested_format}</div>
+                <h4 style="font-weight: 800; font-size: 12px; margin: 4px 0;">${escapeHtml(gap.locality)} Ecosystem Need</h4>
+                <p style="margin: 2px 0 6px 0; opacity: 0.85;">Suggested Topic: <strong>${escapeHtml(gap.suggested_topic)}</strong></p>
+                <div style="font-size: 10px; opacity: 0.7;">Category: ${escapeHtml(gap.category)} • Format: ${escapeHtml(gap.suggested_format)}</div>
               </div>
             `;
             circle.bindPopup(popupContent);
@@ -433,6 +465,11 @@ export const RealLeafletMap: React.FC<Props> = ({
 
     if (mapStyle !== 'transit') return;
 
+    // Transit overlay is active for Bengaluru Namma Metro
+    if (selectedCity && selectedCity.toLowerCase() !== 'bengaluru') {
+      return;
+    }
+
     BENGALURU_METRO_LINES.forEach((line) => {
       // Draw polyline track
       const polyline = L.polyline(line.coordinates, {
@@ -443,7 +480,7 @@ export const RealLeafletMap: React.FC<Props> = ({
         lineJoin: 'round',
         dashArray: '8, 6',
       });
-      polyline.bindTooltip(`<strong>${line.name}</strong>`, { sticky: true });
+      polyline.bindTooltip(`<strong>${escapeHtml(line.name)}</strong>`, { sticky: true });
       transitLayer.addLayer(polyline);
 
       // Draw station nodes
@@ -467,13 +504,22 @@ export const RealLeafletMap: React.FC<Props> = ({
         });
 
         const stMarker = L.marker(st.coords, { icon });
-        stMarker.bindTooltip(`🚇 <strong>${st.name}</strong>${isInterchange ? ' (Interchange Hub)' : ''}`, {
+        stMarker.bindTooltip(`🚇 <strong>${escapeHtml(st.name)}</strong>${isInterchange ? ' (Interchange Hub)' : ''}`, {
           direction: 'top',
         });
         transitLayer.addLayer(stMarker);
       });
     });
-  }, [mapStyle]);
+  }, [mapStyle, selectedCity]);
+
+  // 8. Pan/Fly to city center when selectedCity changes
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const cityKey = (selectedCity || 'bengaluru').toLowerCase();
+    const center = CITY_CENTERS[cityKey] || DEFAULT_CENTER;
+    map.flyTo(center, DEFAULT_ZOOM, { duration: 0.8 });
+  }, [selectedCity]);
 
   // 8. Locate Me Handler
   const handleLocateMe = () => {
@@ -559,82 +605,129 @@ export const RealLeafletMap: React.FC<Props> = ({
   return (
     <div className={`relative w-full ${containerHeight} rounded-3xl overflow-hidden border border-theme bg-surface shadow-card transition-all isolate select-none`}>
       
-      {/* 1. TOP FLOATING SEARCH & FILTER BAR */}
-      <div className="absolute top-4 left-4 right-4 sm:left-6 sm:right-6 z-[600] pointer-events-none">
-        <div className="max-w-3xl mx-auto space-y-2 pointer-events-auto">
+      {/* 1. TOP FLOATING CONTROLS: SEARCH, QUICK FILTERS & MAP STYLE */}
+      <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 z-[600] pointer-events-none">
+        <div className="space-y-2">
           
-          {/* Main Search Pill Bar */}
-          <div className="flex items-center gap-2 p-1.5 sm:p-2 rounded-2xl bg-surface/90 dark:bg-surface/90 backdrop-blur-xl border border-theme shadow-elevated">
+          {/* Top Row: Search & Filters Pill on Left/Center + Map Style on Right */}
+          <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-2">
             
-            {/* Search Input */}
-            <div className="flex-1 flex items-center gap-2 px-3 py-1.5 bg-surface-secondary/70 rounded-xl border border-theme focus-within:border-brand transition-all">
-              <Search className="w-4 h-4 text-secondary shrink-0" />
-              <input
-                type="text"
-                placeholder="Search events, venues, skills..."
-                value={searchQuery}
-                onChange={(e) => onSearchChange?.(e.target.value)}
-                className="w-full bg-transparent text-main text-xs sm:text-sm placeholder:text-muted focus:outline-none"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => onSearchChange?.('')}
-                  className="p-1 text-muted hover:text-main cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
+            {/* Search + Dropdowns Pill */}
+            <div className="flex-1 max-w-3xl flex items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2 rounded-2xl bg-surface/90 dark:bg-surface/90 backdrop-blur-xl border border-theme shadow-elevated pointer-events-auto">
+              
+              {/* Search Input */}
+              <div className="flex-1 flex items-center gap-2 px-3 py-1.5 bg-surface-secondary/70 rounded-xl border border-theme focus-within:border-brand transition-all">
+                <Search className="w-4 h-4 text-secondary shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search events, venues, skills..."
+                  value={searchQuery}
+                  onChange={(e) => onSearchChange?.(e.target.value)}
+                  className="w-full bg-transparent text-main text-xs sm:text-sm placeholder:text-muted focus:outline-none"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => onSearchChange?.('')}
+                    className="p-1 text-muted hover:text-main cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
 
-            {/* Hyperlocal Locality Dropdown */}
-            <div className="relative shrink-0 hidden sm:block">
-              <select
-                value={selectedLocality}
-                onChange={(e) => onSelectLocality(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-surface-secondary/70 border border-theme text-main text-xs font-semibold focus:outline-none focus:border-brand cursor-pointer"
-              >
-                <option value="all">📍 All Bengaluru ({mappedEvents.length})</option>
-                {localities.map((loc) => (
-                  <option key={loc.name} value={loc.name}>
-                    {loc.name} ({loc.event_count})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Distance Radius Selector */}
-            {onRadiusChange && (
-              <div className="relative shrink-0 hidden md:block">
+              {/* Hyperlocal Locality Dropdown */}
+              <div className="relative shrink-0 hidden sm:block">
                 <select
-                  value={radiusFilter}
-                  onChange={(e) => onRadiusChange(e.target.value)}
+                  value={selectedLocality}
+                  onChange={(e) => onSelectLocality(e.target.value)}
                   className="px-3 py-2 rounded-xl bg-surface-secondary/70 border border-theme text-main text-xs font-semibold focus:outline-none focus:border-brand cursor-pointer"
                 >
-                  <option value="all">Radius: Any</option>
-                  <option value="2">Within 2 km</option>
-                  <option value="5">Within 5 km</option>
-                  <option value="10">Within 10 km</option>
-                  <option value="20">Within 20 km</option>
+                  <option value="all">📍 All {selectedCity} ({mappedEvents.length})</option>
+                  {localities.map((loc) => (
+                    <option key={loc.name} value={loc.name}>
+                      {loc.name} ({loc.event_count})
+                    </option>
+                  ))}
                 </select>
               </div>
-            )}
 
-            {/* More Filters Toggle */}
-            <button
-              onClick={() => setShowMoreFilters(!showMoreFilters)}
-              title="More filters"
-              className={`p-2 rounded-xl border transition-all cursor-pointer ${
-                showMoreFilters || priceFilter !== 'all' || formatFilter !== 'all'
-                  ? 'bg-brand text-white border-brand shadow-sm'
-                  : 'bg-surface-secondary/70 text-secondary hover:text-main border-theme'
-              }`}
-            >
-              <Filter className="w-4 h-4" />
-            </button>
+              {/* Distance Radius Selector */}
+              {onRadiusChange && (
+                <div className="relative shrink-0 hidden md:block">
+                  <select
+                    value={radiusFilter}
+                    onChange={(e) => onRadiusChange(e.target.value)}
+                    className="px-3 py-2 rounded-xl bg-surface-secondary/70 border border-theme text-main text-xs font-semibold focus:outline-none focus:border-brand cursor-pointer"
+                  >
+                    <option value="all">Radius: Any</option>
+                    <option value="2">Within 2 km</option>
+                    <option value="5">Within 5 km</option>
+                    <option value="10">Within 10 km</option>
+                    <option value="20">Within 20 km</option>
+                  </select>
+                </div>
+              )}
+
+              {/* More Filters Toggle */}
+              <button
+                onClick={() => setShowMoreFilters(!showMoreFilters)}
+                title="More filters"
+                className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                  showMoreFilters || priceFilter !== 'all' || formatFilter !== 'all'
+                    ? 'bg-brand text-white border-brand shadow-sm'
+                    : 'bg-surface-secondary/70 text-secondary hover:text-main border-theme'
+                }`}
+              >
+                <Filter className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Map-Style Selector */}
+            <div className="flex items-center self-start xl:self-auto shrink-0 p-1 rounded-2xl bg-surface/90 backdrop-blur-xl border border-theme shadow-elevated pointer-events-auto">
+              <button
+                onClick={() => setMapStyle('standard')}
+                title="Standard Event Map"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  mapStyle === 'standard'
+                    ? 'bg-brand text-white shadow-sm'
+                    : 'text-secondary hover:text-main'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Standard</span>
+              </button>
+
+              <button
+                onClick={() => setMapStyle('pulse')}
+                title="Community Demand & Wishlist Heatmap"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  mapStyle === 'pulse'
+                    ? 'bg-rose-500 text-white shadow-sm'
+                    : 'text-secondary hover:text-main'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <span>Community Pulse</span>
+              </button>
+
+              <button
+                onClick={() => setMapStyle('transit')}
+                title={selectedCity.toLowerCase() === 'bengaluru' ? "Bengaluru Namma Metro Lines" : "Metro Transit View"}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  mapStyle === 'transit'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-secondary hover:text-main'
+                }`}
+              >
+                <TrainFront className="w-3.5 h-3.5" />
+                <span>Transit View</span>
+              </button>
+            </div>
+
           </div>
 
           {/* Floating Category Filter Chips Row */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none px-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none px-1 pointer-events-auto">
             {CATEGORIES_LIST.map((cat) => {
               const isActive = selectedCategory === cat.id;
               return (
@@ -656,7 +749,7 @@ export const RealLeafletMap: React.FC<Props> = ({
 
           {/* More Filters Popover Drawer */}
           {showMoreFilters && (
-            <div className="p-3.5 rounded-2xl bg-surface/95 backdrop-blur-xl border border-theme shadow-elevated grid grid-cols-2 gap-3 text-xs animate-fade-in pointer-events-auto">
+            <div className="p-3.5 rounded-2xl bg-surface/95 backdrop-blur-xl border border-theme shadow-elevated grid grid-cols-2 gap-3 text-xs animate-fade-in pointer-events-auto max-w-xl">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-muted mb-1">
                   Format
@@ -701,9 +794,25 @@ export const RealLeafletMap: React.FC<Props> = ({
             </div>
           )}
 
+          {/* Transit Notice Banner if non-Bengaluru city is selected */}
+          {mapStyle === 'transit' && selectedCity.toLowerCase() !== 'bengaluru' && (
+            <div className="flex items-center justify-between px-3.5 py-2 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs backdrop-blur-xl pointer-events-auto shadow-elevated max-w-xl">
+              <span className="flex items-center gap-2">
+                <TrainFront className="w-4 h-4 shrink-0 text-amber-500" />
+                <span>Metro transit map overlay is currently detailed for Bengaluru Namma Metro.</span>
+              </span>
+              <button
+                onClick={() => setMapStyle('standard')}
+                className="font-bold underline ml-2 shrink-0 cursor-pointer text-[11px]"
+              >
+                Standard Map
+              </button>
+            </div>
+          )}
+
           {/* Search This Area Floating Pill */}
           {showAreaSearchBtn && onSearchThisArea && (
-            <div className="flex justify-center animate-fade-in pt-1">
+            <div className="flex justify-center animate-fade-in pt-1 pointer-events-auto">
               <button
                 onClick={handleSearchAreaClick}
                 className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-brand text-white text-xs font-bold shadow-elevated hover:bg-brand-hover active:scale-95 transition-all cursor-pointer ring-2 ring-white/20"
@@ -717,47 +826,7 @@ export const RealLeafletMap: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 2. TOP RIGHT: FLOATING MAP-STYLE SELECTOR */}
-      <div className="absolute top-4 right-4 z-[500] hidden sm:flex items-center p-1 rounded-2xl bg-surface/90 backdrop-blur-xl border border-theme shadow-elevated">
-        <button
-          onClick={() => setMapStyle('standard')}
-          title="Standard Event Map"
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            mapStyle === 'standard'
-              ? 'bg-brand text-white shadow-sm'
-              : 'text-secondary hover:text-main'
-          }`}
-        >
-          <Layers className="w-3.5 h-3.5" />
-          <span>Standard</span>
-        </button>
 
-        <button
-          onClick={() => setMapStyle('pulse')}
-          title="Community Demand & Wishlist Heatmap"
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            mapStyle === 'pulse'
-              ? 'bg-rose-500 text-white shadow-sm'
-              : 'text-secondary hover:text-main'
-          }`}
-        >
-          <Zap className="w-3.5 h-3.5 text-amber-400" />
-          <span>Community Pulse</span>
-        </button>
-
-        <button
-          onClick={() => setMapStyle('transit')}
-          title="Bengaluru Namma Metro Lines"
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-            mapStyle === 'transit'
-              ? 'bg-emerald-600 text-white shadow-sm'
-              : 'text-secondary hover:text-main'
-          }`}
-        >
-          <TrainFront className="w-3.5 h-3.5" />
-          <span>Transit View</span>
-        </button>
-      </div>
 
       {/* 3. BOTTOM LEFT: CATEGORY COLOR LEGEND */}
       <div className="absolute bottom-5 left-5 z-[500] hidden md:block">
@@ -836,7 +905,7 @@ export const RealLeafletMap: React.FC<Props> = ({
             <div className="flex items-start gap-3">
               <img
                 src={
-                  activeEvent.banner_url ||
+                  sanitizeUrl(activeEvent.banner_url) ||
                   'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=600&q=80'
                 }
                 alt={activeEvent.title}

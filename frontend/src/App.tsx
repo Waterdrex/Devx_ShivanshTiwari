@@ -44,6 +44,15 @@ const DEFAULT_DEMO_USER: UserProfile = {
   is_admin: 0,
 };
 
+const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  bengaluru: { lat: 12.9716, lng: 77.5946 },
+  mumbai: { lat: 19.0760, lng: 72.8777 },
+  'delhi ncr': { lat: 28.6139, lng: 77.2090 },
+  delhi: { lat: 28.6139, lng: 77.2090 },
+  hyderabad: { lat: 17.3850, lng: 78.4867 },
+  pune: { lat: 18.5204, lng: 73.8567 },
+};
+
 export function App() {
   const [activeTab, setActiveTab] = useState<
     'discover' | 'radar' | 'planner' | 'teammatch' | 'demands' | 'passport' | 'my-events' | 'organizer'
@@ -70,6 +79,12 @@ export function App() {
   const [formatFilter, setFormatFilter] = useState('all');
   const [priceFilter, setPriceFilter] = useState('all');
   const [sortBy, setSortBy] = useState('relevance');
+  const [activeMapBounds, setActiveMapBounds] = useState<{
+    min_lat: number;
+    max_lat: number;
+    min_lng: number;
+    max_lng: number;
+  } | null>(null);
 
   // Modals state
   const [trustModalEvent, setTrustModalEvent] = useState<EventItem | null>(null);
@@ -133,6 +148,17 @@ export function App() {
     setLoadingEvents(true);
     try {
       const rad = radiusFilter !== 'all' ? parseFloat(radiusFilter) : undefined;
+      let centerLat: number | undefined = undefined;
+      let centerLng: number | undefined = undefined;
+
+      // Coordinate-based distance filtering: resolve center from city or GPS coordinates
+      if (rad !== undefined) {
+        const cityKey = (cityFilter || 'Bengaluru').toLowerCase();
+        const coords = CITY_COORDINATES[cityKey] || CITY_COORDINATES['bengaluru'];
+        centerLat = coords.lat;
+        centerLng = coords.lng;
+      }
+
       const data = await fetchEvents({
         search: searchQuery,
         category: selectedCategory,
@@ -141,7 +167,10 @@ export function App() {
         format: formatFilter,
         price_type: priceFilter,
         sort_by: sortBy,
+        latitude: centerLat,
+        longitude: centerLng,
         radius_km: rad,
+        bounds: activeMapBounds || undefined,
         user_id: currentUser?.id || undefined,
       });
       setEvents(data.events);
@@ -151,6 +180,13 @@ export function App() {
     } finally {
       setLoadingEvents(false);
     }
+  };
+
+  // City selection handler - resets active locality and map bounding box filter
+  const handleCityChange = (newCity: string) => {
+    setCityFilter(newCity);
+    setLocalityFilter('all');
+    setActiveMapBounds(null);
   };
 
   // Load schedule
@@ -179,33 +215,16 @@ export function App() {
 
   useEffect(() => {
     loadEvents();
-  }, [searchQuery, selectedCategory, cityFilter, localityFilter, radiusFilter, formatFilter, priceFilter, sortBy, currentUser]);
+  }, [searchQuery, selectedCategory, cityFilter, localityFilter, radiusFilter, formatFilter, priceFilter, sortBy, activeMapBounds, currentUser]);
 
   useEffect(() => {
     loadPlanner();
   }, [currentUser]);
 
-  // Bounding box map search
-  const handleSearchThisArea = async (bounds: { min_lat: number; max_lat: number; min_lng: number; max_lng: number }) => {
-    setLoadingEvents(true);
-    try {
-      const data = await fetchEvents({
-        search: searchQuery,
-        category: selectedCategory,
-        city: cityFilter !== 'all' ? cityFilter : undefined,
-        format: formatFilter,
-        price_type: priceFilter,
-        sort_by: sortBy,
-        bounds,
-        user_id: currentUser?.id || undefined,
-      });
-      setEvents(data.events);
-      showToast(`Found ${data.events.length} events in this visible area`, 'info');
-    } catch (err) {
-      console.error('Failed to search area', err);
-    } finally {
-      setLoadingEvents(false);
-    }
+  // Bounding box map search - persists in state across filter changes
+  const handleSearchThisArea = (bounds: { min_lat: number; max_lat: number; min_lng: number; max_lng: number }) => {
+    setActiveMapBounds(bounds);
+    showToast('Filtering events within selected map area', 'info');
   };
 
   // Handlers
@@ -406,7 +425,7 @@ export function App() {
             selectedCategory={selectedCategory}
             setSelectedCategory={setSelectedCategory}
             cityFilter={cityFilter}
-            setCityFilter={setCityFilter}
+            setCityFilter={handleCityChange}
             localityFilter={localityFilter}
             setLocalityFilter={setLocalityFilter}
             radiusFilter={radiusFilter}

@@ -440,6 +440,7 @@ export const DiscoverPage: React.FC<Props> = ({
               onSelectLocality={(loc) => setLocalityFilter(loc)}
               selectedCategory={selectedCategory}
               onSelectCategory={(cat) => setSelectedCategory(cat)}
+              selectedCity={cityFilter}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               radiusFilter={radiusFilter}
@@ -470,6 +471,7 @@ export const DiscoverPage: React.FC<Props> = ({
             onSelectLocality={(loc) => setLocalityFilter(loc)}
             selectedCategory={selectedCategory}
             onSelectCategory={(cat) => setSelectedCategory(cat)}
+            selectedCity={cityFilter}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             radiusFilter={radiusFilter}

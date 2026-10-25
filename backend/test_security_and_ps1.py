@@ -44,6 +44,12 @@ class DirectFastAPIClient:
             elif path == "/api/cities":
                 return MockResponse(200, main.list_cities())
 
+            elif path.startswith("/api/events/"):
+                parts = path.strip("/").split("/")
+                event_id = parts[2]
+                res = main.get_event_detail(event_id, user_id=None)
+                return MockResponse(200, res)
+
             elif path == "/api/events":
                 city = qs.get("city", [None])[0]
                 category = qs.get("category", [None])[0]
@@ -266,6 +272,31 @@ def test_users_cannot_edit_or_delete_others_events():
     login_b = client.post("/api/auth/login", json={"email": "priya.nair@demo.eventsphere.io", "password": "password123"})
     token_b = login_b.json()["token"]
     headers_b = {"Authorization": f"Bearer {token_b}"}
+
+    # Anonymous (no auth) attempts to delete event -> 401 Unauthorized
+    anon_del_res = client.delete(f"/api/events/{event_id}")
+    assert anon_del_res.status_code == 401, f"Expected 401 for anonymous event deletion, got {anon_del_res.status_code}"
+
+    # Anonymous (no auth) attempts to create event -> 401 Unauthorized
+    anon_create_res = client.post("/api/events", json={
+        "title": "Anonymous Event Attempt",
+        "description": "Should fail",
+        "category": "tech",
+        "event_type": "meetup",
+        "format": "offline",
+        "price_type": "free",
+        "price": 0.0,
+        "date": "2026-12-10",
+        "start_time": "10:00",
+        "end_time": "18:00",
+        "venue": "Test Venue",
+        "city": "Bengaluru",
+        "location": "Bengaluru, Karnataka",
+        "locality": "Indiranagar",
+        "total_seats": 50,
+        "skills": []
+    })
+    assert anon_create_res.status_code == 401, f"Expected 401 for anonymous event creation, got {anon_create_res.status_code}"
 
     # User B attempts to edit User A's event -> 403 Forbidden
     edit_res = client.put(f"/api/events/{event_id}", json={
@@ -509,6 +540,19 @@ def test_development_only_features_remain_disabled_under_production():
         reset_res = client.post("/api/admin/reset", headers=headers_admin)
         assert reset_res.status_code == 403, f"Expected 403 in production, got {reset_res.status_code}"
         assert "disabled in production" in reset_res.json()["detail"].lower()
+
+        # In development, when ALLOW_DEMO_RESET is false, reset is blocked
+        os.environ["ENVIRONMENT"] = "development"
+        os.environ["ALLOW_DEMO_RESET"] = "false"
+        reset_dev_disabled = client.post("/api/admin/reset", headers=headers_admin)
+        assert reset_dev_disabled.status_code == 403, f"Expected 403 when ALLOW_DEMO_RESET=false, got {reset_dev_disabled.status_code}"
+        assert "disabled" in reset_dev_disabled.json()["detail"].lower()
+
+        # In development, when ALLOW_DEMO_RESET is explicitly true, reset succeeds
+        os.environ["ENVIRONMENT"] = "development"
+        os.environ["ALLOW_DEMO_RESET"] = "true"
+        reset_dev_enabled = client.post("/api/admin/reset", headers=headers_admin)
+        assert reset_dev_enabled.status_code == 200, f"Expected 200 when ALLOW_DEMO_RESET=true, got {reset_dev_enabled.status_code}"
     finally:
         os.environ["ENVIRONMENT"] = orig_env
         os.environ["ALLOW_DEMO_RESET"] = orig_reset
@@ -545,6 +589,44 @@ def test_community_gap_radar():
     assert "suggested_topic" in first_gap
     assert first_gap["is_demo_insight"] is True
 
+def test_xss_payload_safety():
+    """13. XSS injection payloads in event titles or descriptions are safely handled."""
+    login_res = client.post("/api/auth/login", json={"email": "organizer@demo.eventsphere.io", "password": "password123"})
+    token = login_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    xss_payload = {
+        "title": "<script>alert('xss')</script> Web3 Security Sprint",
+        "description": "<img src=x onerror=alert('xss')> Comprehensive auditing.",
+        "category": "hackathons",
+        "event_type": "hackathon",
+        "format": "offline",
+        "price_type": "free",
+        "price": 0.0,
+        "date": "2026-11-20",
+        "start_time": "09:00",
+        "end_time": "17:00",
+        "venue": "CyberTower <b onmouseover=alert(1)>Hall</b>",
+        "city": "Bengaluru",
+        "location": "Bengaluru, Karnataka",
+        "locality": "HSR Layout",
+        "total_seats": 75,
+        "skills": ["Solidity", "Security"]
+    }
+    create_res = client.post("/api/events", json=xss_payload, headers=headers)
+    assert create_res.status_code == 201, f"Create failed: {create_res.status_code} {create_res.data}"
+    created_id = create_res.json()["event"]["id"]
+
+    # Verify retrieval
+    get_res = client.get(f"/api/events/{created_id}")
+    assert get_res.status_code == 200, f"Get detail failed: {get_res.status_code} {get_res.json()}"
+    ev = get_res.json()
+    assert "<script>alert('xss')</script>" in ev["title"]
+
+    # Clean up test event
+    del_res = client.delete(f"/api/events/{created_id}", headers=headers)
+    assert del_res.status_code == 200
+
 if __name__ == "__main__":
     setup_module()
     test_funcs = [
@@ -559,7 +641,8 @@ if __name__ == "__main__":
         test_legitimate_administrator_workflow,
         test_development_only_features_remain_disabled_under_production,
         test_configurable_cities_and_distance_filtering,
-        test_community_gap_radar
+        test_community_gap_radar,
+        test_xss_payload_safety
     ]
     print(f"Running {len(test_funcs)} security & PS1 regression tests...")
     passed = 0
@@ -582,4 +665,4 @@ if __name__ == "__main__":
     if failed > 0:
         sys.exit(1)
     else:
-        print("ALL 12 SECURITY & PS1 REGRESSION TESTS PASSED!")
+        print(f"ALL {len(test_funcs)} SECURITY & PS1 REGRESSION TESTS PASSED!")

@@ -89,10 +89,13 @@ def test_full_flow():
         skills=["Python", "PyTorch", "Robotics", "FastAPI"],
         agenda="09:00 Briefing, 11:00 Flight Labs, 17:00 Final Demos"
     )
-    created = main.create_event(new_event_data)
+    from models import UserLogin
+    login_org = main.login(UserLogin(email="organizer@demo.eventsphere.io", password="password123"))
+    auth_org = f"Bearer {login_org['token']}"
+    created = main.create_event(new_event_data, authorization=auth_org)
     print(f"[OK] Organizer Event Publishing Working: Created '{created['event']['title']}' (ID: {created['event']['id']})")
     
-    stats = main.get_organizer_stats()
+    stats = main.get_organizer_stats(authorization=auth_org)
     print(f"[OK] Organizer Hub Stats Working: Total events = {stats['total_events']}, Registrations = {stats['total_registrations']}, Avg Trust = {stats['average_trust_score']}")
 
     # 7. Test Registration & Bookmark with authenticated session

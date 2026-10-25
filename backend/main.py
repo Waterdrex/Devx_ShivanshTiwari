@@ -554,7 +554,7 @@ def get_event_detail(event_id: str, user_id: Optional[str] = Query(None)):
     trust = compute_trust_score(target, dup_info)
     target["trust"] = trust
 
-    uid = user_id if (user_id and user_id.strip() and user_id != "null") else None
+    uid = user_id if (isinstance(user_id, str) and user_id.strip() and user_id != "null") else None
     if uid:
         conn = get_connection()
         cursor = conn.cursor()
@@ -1435,7 +1435,17 @@ def toggle_bookmark(payload: BookmarkToggleRequest, authorization: Optional[str]
 
 @app.post("/api/events", status_code=status.HTTP_201_CREATED)
 def create_event(payload: EventCreate, authorization: Optional[str] = Header(None)):
-    user = get_optional_user(authorization)
+    user = get_required_user(authorization)
+
+    # Input validation
+    if not payload.title or not payload.title.strip():
+        raise HTTPException(status_code=422, detail="Event title is required")
+    if not payload.date or not payload.date.strip():
+        raise HTTPException(status_code=422, detail="Event date is required")
+    if payload.total_seats < 1 or payload.total_seats > 50000:
+        raise HTTPException(status_code=422, detail="total_seats must be between 1 and 50,000")
+    if payload.price < 0:
+        raise HTTPException(status_code=422, detail="price must be non-negative")
     
     event_id = f"ev-{uuid.uuid4().hex[:8]}"
     ev_dict = payload.model_dump()
@@ -1448,21 +1458,12 @@ def create_event(payload: EventCreate, authorization: Optional[str] = Header(Non
     ev_dict["longitude"] = ev_dict.get("longitude") or 77.6245
 
     # Server-enforced identity and moderation state
-    if user:
-        ev_dict["organizer_id"] = user["id"]
-        ev_dict["organizer_name"] = user["name"]
-        ev_dict["organizer_email"] = user["email"]
-        ev_dict["organizer_verified"] = 1 if user.get("is_admin") or user.get("is_verified_organizer") or user.get("role") == "Event Organizer" else 0
-        ev_dict["review_status"] = "reviewed" if user.get("is_admin") else "unreviewed"
-        ev_dict["is_demo"] = 0
-    else:
-        # Fallback for unauthenticated dev/testing scripts if user_id not provided
-        ev_dict["organizer_id"] = "u-organizer"
-        ev_dict["organizer_name"] = ev_dict.get("organizer_name") or "Bangalore Tech Organizer"
-        ev_dict["organizer_email"] = ev_dict.get("organizer_email") or "organizer@demo.eventsphere.io"
-        ev_dict["organizer_verified"] = 0
-        ev_dict["review_status"] = "unreviewed"
-        ev_dict["is_demo"] = 0
+    ev_dict["organizer_id"] = user["id"]
+    ev_dict["organizer_name"] = user.get("name") or "Event Organizer"
+    ev_dict["organizer_email"] = user.get("email") or "organizer@eventsphere.io"
+    ev_dict["organizer_verified"] = 1 if user.get("is_admin") or user.get("is_verified_organizer") or user.get("role") == "Event Organizer" else 0
+    ev_dict["review_status"] = "reviewed" if user.get("is_admin") else "unreviewed"
+    ev_dict["is_demo"] = 0
 
     all_events = get_all_raw_events()
     dup_info = detect_duplicate(ev_dict, all_events)
@@ -1543,7 +1544,7 @@ def update_event(event_id: str, payload: EventUpdate, authorization: Optional[st
 
 @app.delete("/api/events/{event_id}")
 def delete_event(event_id: str, authorization: Optional[str] = Header(None)):
-    user = get_optional_user(authorization)
+    user = get_required_user(authorization)
     
     conn = get_connection()
     cursor = conn.cursor()
@@ -1554,11 +1555,10 @@ def delete_event(event_id: str, authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=404, detail="Event not found")
 
     ev = dict(row)
-    # Server-side RBAC: If user is authenticated, must be event organizer or admin!
-    if user:
-        if ev.get("organizer_id") != user["id"] and not user.get("is_admin"):
-            conn.close()
-            raise HTTPException(status_code=403, detail="Forbidden: You can only delete events that you own.")
+    # Server-side RBAC: Only event creator or platform admin can delete event!
+    if ev.get("organizer_id") != user["id"] and not user.get("is_admin"):
+        conn.close()
+        raise HTTPException(status_code=403, detail="Forbidden: You can only delete events that you own.")
     
     cursor.execute("DELETE FROM events WHERE id = ?", (event_id,))
     cursor.execute("DELETE FROM bookmarks WHERE event_id = ?", (event_id,))
@@ -1631,12 +1631,17 @@ def reset_demo_database(authorization: Optional[str] = Header(None)):
     require_admin(user)
 
     # 2. Production safety lock: check environment
-    env = os.getenv("ENVIRONMENT", "development").lower()
-    allow_reset = os.getenv("ALLOW_DEMO_RESET", "true").lower() == "true"
-    if env == "production" and not allow_reset:
+    env = os.getenv("ENVIRONMENT", "development").lower().strip()
+    if env in ("production", "prod", "staging"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Database reset functionality is strictly disabled in production environments."
+        )
+    allow_reset = os.getenv("ALLOW_DEMO_RESET", "false").lower().strip()
+    if allow_reset not in ("true", "1", "yes"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Database reset functionality is disabled. Set ALLOW_DEMO_RESET=true in development to enable."
         )
 
     # 3. Perform reset
